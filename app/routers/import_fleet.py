@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import require_admin
@@ -239,7 +240,7 @@ def confirm_import(
                     db.add(comp)
                     imported_count += 1
         db.commit()
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         db.rollback()
         return RedirectResponse(url=f"/admin/import?error=Ошибка+транзакции+импорта:+{exc}", status_code=status.HTTP_302_FOUND)
 
