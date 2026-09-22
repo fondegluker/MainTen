@@ -13,6 +13,15 @@ An audit was conducted against `docs/requirements.md` §1–§3 and §9 Iteratio
 
 No gaps were identified in Step 0 audit.
 
+## Default Admin User Credentials
+
+- Seeded default administrator account via Alembic migration (`63a1b2c4d5e6`):
+  - **Username**: `admin`
+  - **Email/Login**: `admin@cfms.local`
+  - **Default Password**: `admin123`
+  - **Role**: `ADMIN`
+- Password is stored hashed using `argon2` via `LocalAuthProvider`.
+
 ## Iteration 2 Architecture & Design Decisions
 
 ### Admin CRUD & Audit Logging

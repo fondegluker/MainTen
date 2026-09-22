@@ -18,6 +18,19 @@ CFMS is built with a server-rendered web stack and modular architecture:
 
 ---
 
+## Default Administrator Credentials
+
+Upon initial database migration (`alembic upgrade head`), a default administrator account is seeded:
+
+- **Username**: `admin`
+- **Email / Login**: `admin@cfms.local`
+- **Password**: `admin123`
+- **Role**: `ADMIN`
+
+*Note: Change the password immediately upon initial deployment in production.*
+
+---
+
 ## Features (Iteration 1 & 2)
 
 - **Admin Management**:
