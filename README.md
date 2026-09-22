@@ -9,6 +9,7 @@ CFMS is built with a server-rendered web stack and modular architecture:
 - **Backend**: Python 3.12, FastAPI, SQLAlchemy 2.0 ORM, Alembic migrations.
 - **Frontend**: Jinja2 SSR, Tailwind CSS, HTMX, Alpine.js.
 - **Database**: PostgreSQL 16.
+- **Network Tools**: `nmap` and `arp-scan` pre-installed in container image.
 - **i18n**: Built-in translation engine with Russian (default) and English support.
 - **Auth**:
   - Local authentication (Argon2/Bcrypt) for ADMIN, TECHNICIAN, OBSERVER.
@@ -45,6 +46,14 @@ erDiagram
         datetime next_maintenance_due_at
         string status
         text notes
+    }
+
+    working_calendar {
+        int id PK
+        date date UK
+        boolean is_working
+        enum kind
+        string description
     }
 
     maintenance_protocol_items {

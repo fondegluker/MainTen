@@ -11,6 +11,17 @@
 ### Database: PostgreSQL 16
 - **Rationale**: Robust, battle-tested transactional relational database supporting JSON data types for flexible configurations (`settings`, `audit_log`, `notifications.payload_json`).
 
+## Working Calendar Delta & Belarus Holidays
+
+- Added `working_calendar` table via Alembic migration (`52f9a72b834e`).
+- Automatically seeds default working days (Mon-Fri) and official Belarusian public holidays (`holiday` kind) for current and next calendar years (2025-2026).
+- Unique index on `date` guarantees no duplicate entries.
+- `CalendarRepository` provides helper queries for checking working days and retrieving working day ranges.
+
+## System Packages & Dependencies
+
+- Docker container includes system network utilities `nmap` and `arp-scan` to support network scanning functionality (§1 & §5.1).
+
 ## Auth Architecture Abstraction
 
 An explicit abstraction was implemented to isolate authentication strategy:

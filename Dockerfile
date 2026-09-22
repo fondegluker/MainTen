@@ -5,11 +5,13 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Install system dependencies
+# Install system dependencies including network tools nmap and arp-scan
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
+    nmap \
+    arp-scan \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies

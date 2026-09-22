@@ -2,6 +2,7 @@ from app.core.database import Base
 from app.models.models import (
     AuditLog,
     Computer,
+    DayKind,
     MaintenanceEvent,
     MaintenanceEventAttachment,
     MaintenanceEventCheck,
@@ -11,12 +12,14 @@ from app.models.models import (
     Setting,
     User,
     UserRole,
+    WorkingCalendar,
 )
 
 __all__ = [
     "AuditLog",
     "Base",
     "Computer",
+    "DayKind",
     "MaintenanceEvent",
     "MaintenanceEventAttachment",
     "MaintenanceEventCheck",
@@ -26,4 +29,5 @@ __all__ = [
     "Setting",
     "User",
     "UserRole",
+    "WorkingCalendar",
 ]

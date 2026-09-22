@@ -1,18 +1,8 @@
 import enum
-from datetime import datetime
-from typing import Any, Optional
+from datetime import date, datetime
+from typing import Any
 
-from sqlalchemy import (
-    JSON,
-    Boolean,
-    Date,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-)
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -33,6 +23,12 @@ class MaintenanceEventStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class DayKind(str, enum.Enum):
+    WORKDAY = "workday"
+    WEEKEND = "weekend"
+    HOLIDAY = "holiday"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -40,7 +36,9 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     email_or_login: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.USER, nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, values_callable=lambda obj: [e.value for e in obj]), default=UserRole.USER, nullable=False
+    )
     locale: Mapped[str] = mapped_column(String(10), default="ru", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
@@ -65,7 +63,7 @@ class Computer(Base):
     status: Mapped[str] = mapped_column(String(50), default="active", nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    owner_user: Mapped[Optional["User"]] = relationship("User", back_populates="computers")
+    owner_user: Mapped["User | None"] = relationship("User", back_populates="computers")
     maintenance_events: Mapped[list["MaintenanceEvent"]] = relationship("MaintenanceEvent", back_populates="computer")
 
 
@@ -88,10 +86,10 @@ class MaintenanceEvent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     computer_id: Mapped[int] = mapped_column(Integer, ForeignKey("computers.id"), nullable=False)
     technician_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    scheduled_date: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    scheduled_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     scheduled_slot: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[MaintenanceEventStatus] = mapped_column(
-        Enum(MaintenanceEventStatus), default=MaintenanceEventStatus.PLANNED, nullable=False
+        Enum(MaintenanceEventStatus, values_callable=lambda obj: [e.value for e in obj]), default=MaintenanceEventStatus.PLANNED, nullable=False
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -100,7 +98,7 @@ class MaintenanceEvent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     computer: Mapped["Computer"] = relationship("Computer", back_populates="maintenance_events")
-    technician: Mapped[Optional["User"]] = relationship("User", back_populates="assigned_events")
+    technician: Mapped["User | None"] = relationship("User", back_populates="assigned_events")
     checks: Mapped[list["MaintenanceEventCheck"]] = relationship("MaintenanceEventCheck", back_populates="event", cascade="all, delete-orphan")
     attachments: Mapped[list["MaintenanceEventAttachment"]] = relationship("MaintenanceEventAttachment", back_populates="event", cascade="all, delete-orphan")
 
@@ -163,3 +161,15 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value_json: Mapped[Any] = mapped_column(JSON, nullable=False)
+
+
+class WorkingCalendar(Base):
+    __tablename__ = "working_calendar"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    date: Mapped[date] = mapped_column(Date, unique=True, index=True, nullable=False)
+    is_working: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    kind: Mapped[DayKind] = mapped_column(
+        Enum(DayKind, values_callable=lambda obj: [e.value for e in obj]), default=DayKind.WORKDAY, nullable=False
+    )
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
