@@ -46,8 +46,19 @@ def test_default_admin_seed(setup_admin_db):
     assert admin.role == UserRole.ADMIN
     assert admin.is_active is True
 
-    # Test authentication with default password
     provider = LocalAuthProvider()
-    auth_user = provider.authenticate(setup_admin_db, AuthCredentials("admin", "admin123"))
-    assert auth_user is not None
-    assert auth_user.id == admin.id
+
+    # Test authentication via username "admin"
+    auth_user_by_username = provider.authenticate(setup_admin_db, AuthCredentials("admin", "admin123"))
+    assert auth_user_by_username is not None
+    assert auth_user_by_username.id == admin.id
+
+    # Test authentication via email_or_login "admin@cfms.local"
+    auth_user_by_email = provider.authenticate(setup_admin_db, AuthCredentials("admin@cfms.local", "admin123"))
+    assert auth_user_by_email is not None
+    assert auth_user_by_email.id == admin.id
+
+    # Test case-insensitive and trimmed login
+    auth_user_case = provider.authenticate(setup_admin_db, AuthCredentials("  ADMIN@CFMS.LOCAL  ", "admin123"))
+    assert auth_user_case is not None
+    assert auth_user_case.id == admin.id

@@ -1,5 +1,5 @@
-
 from passlib.context import CryptContext
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth.base import AuthCredentials, BaseAuthProvider
@@ -19,21 +19,23 @@ class LocalAuthProvider(BaseAuthProvider):
         return pwd_context.verify(plain_password, hashed_password)
 
     def authenticate(self, db: Session, credentials: AuthCredentials) -> User | None:
-        if not credentials.password:
+        if not credentials.password or not credentials.username_or_email:
             return None
+
+        identifier = credentials.username_or_email.strip().lower()
 
         user = (
             db.query(User)
             .filter(
-                (User.username == credentials.username_or_email)
-                | (User.email_or_login == credentials.username_or_email)
+                (func.lower(User.username) == identifier)
+                | (func.lower(User.email_or_login) == identifier)
             )
             .first()
         )
         if not user or not user.is_active or not user.password_hash:
             return None
 
-        if self.verify_password(credentials.password, user.password_hash):
+        if self.verify_password(credentials.password.strip(), user.password_hash):
             return user
         return None
 
