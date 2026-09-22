@@ -11,7 +11,7 @@ from app.auth.providers import LocalAuthProvider
 from app.auth.tokens import generate_magic_link_token
 from app.core.database import get_db
 from app.core.validators import validate_ip, validate_mac
-from app.models.models import Computer, Setting, User, UserRole
+from app.models.models import AuditLog, Computer, Setting, User, UserRole
 from app.routers.web import context_with_defaults
 from app.services.audit_service import log_audit
 
@@ -611,3 +611,49 @@ def delete_computer(
         )
 
     return RedirectResponse(url="/admin/computers?message=Компьютер+удален", status_code=status.HTTP_302_FOUND)
+
+# --- AUDIT LOG VIEWER ---
+
+@router.get("/audit", response_class=HTMLResponse)
+def list_audit_logs(
+    request: Request,
+    q: str | None = Query(None),
+    entity: str | None = Query(None),
+    action: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=100),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(AuditLog)
+
+    if q and q.strip():
+        search_term = f"%{q.strip().lower()}%"
+        query = query.filter((func.lower(AuditLog.action).like(search_term)) | (func.lower(AuditLog.entity).like(search_term)))
+
+    if entity and entity.strip():
+        query = query.filter(func.lower(AuditLog.entity) == entity.strip().lower())
+
+    if action and action.strip():
+        query = query.filter(func.lower(AuditLog.action) == action.strip().lower())
+
+    query = query.order_by(AuditLog.id.desc())
+
+    total_count = query.count()
+    total_pages = max(1, ceil(total_count / per_page))
+    page = min(page, total_pages)
+
+    logs = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    return templates.TemplateResponse(
+        "admin/audit.html",
+        context_with_defaults(request, current_user, {
+            "logs": logs,
+            "search": q,
+            "entity_filter": entity,
+            "action_filter": action,
+            "page": page,
+            "total_pages": total_pages,
+            "total_count": total_count,
+        })
+    )

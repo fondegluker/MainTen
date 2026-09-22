@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Журнал аудита - CFMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-3xl font-bold text-gray-900">Журнал аудита (Audit Log)</h1>
+    </div>
+
+    <!-- Filter Form -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <form method="GET" action="/admin/audit" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Поиск по действию / сущности</label>
+                <input type="text" name="q" value="{{ search or '' }}" placeholder="create_user, computers..."
+                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Сущность (Entity)</label>
+                <select name="entity" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Все сущности</option>
+                    <option value="users" {% if entity_filter == 'users' %}selected{% endif %}>users</option>
+                    <option value="computers" {% if entity_filter == 'computers' %}selected{% endif %}>computers</option>
+                    <option value="settings" {% if entity_filter == 'settings' %}selected{% endif %}>settings</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Действие (Action)</label>
+                <input type="text" name="action" value="{{ action_filter or '' }}" placeholder="create_user..."
+                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="flex items-end space-x-2">
+                <button type="submit" class="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md text-sm transition">Фильтр</button>
+                <a href="/admin/audit" class="py-2 px-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md text-sm transition">Сброс</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">ID</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Время</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Инициатор (Actor)</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Действие</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Сущность [ID]</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">До / После</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                {% for log in logs %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-mono text-gray-500">#{{ log.id }}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-gray-600">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '-' }}</td>
+                    <td class="px-4 py-3 font-medium text-gray-900">
+                        {% if log.actor_user_id %}
+                            #{{ log.actor_user_id }}
+                        {% else %}
+                            <span class="text-gray-400">Система</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">{{ log.action }}</span>
+                    </td>
+                    <td class="px-4 py-3 font-mono text-gray-800">{{ log.entity }}{% if log.entity_id %} [{{ log.entity_id }}]{% endif %}</td>
+                    <td class="px-4 py-3 text-xs max-w-xs truncate font-mono text-gray-600">
+                        {% if log.before_json %}
+                            <span class="text-red-600">before:</span> {{ log.before_json }}<br>
+                        {% endif %}
+                        {% if log.after_json %}
+                            <span class="text-green-600">after:</span> {{ log.after_json }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">Записи аудита не найдены.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
+        <div class="text-sm text-gray-500">Страница {{ page }} из {{ total_pages }} (Всего: {{ total_count }})</div>
+        <div class="flex space-x-2">
+            {% if page > 1 %}
+                <a href="/admin/audit?page={{ page - 1 }}&q={{ search or '' }}&entity={{ entity_filter or '' }}&action={{ action_filter or '' }}" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300">Назад</a>
+            {% endif %}
+            {% if page < total_pages %}
+                <a href="/admin/audit?page={{ page + 1 }}&q={{ search or '' }}&entity={{ entity_filter or '' }}&action={{ action_filter or '' }}" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300">Вперед</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
