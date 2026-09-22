@@ -25,3 +25,6 @@ sudo usermod -aG docker $USER
 # 7. Проверяем
 docker --version
 docker compose version
+
+# wsl --shutdown
+# systemctl status docker
