@@ -1,4 +1,4 @@
-# Project: Computer Fleet Maintenance Scheduler (CFMS)
+# Project: MainTen — Computer Fleet Maintenance Scheduler
 
 You are a senior full-stack engineer. Build a production-ready web application
 for scheduling and tracking preventive maintenance (ТО) of a corporate
@@ -6,47 +6,53 @@ computer fleet. Follow every requirement below strictly. When a choice is
 not specified, pick a mainstream, well-documented, boring technology — do not
 invent exotic solutions.
 
-Deliver the work in ITERATIONS (see the end of this prompt). Each iteration
-must ship with passing tests, updated docs, and be runnable end-to-end.
+This project lives in the GitHub repository **MainTen**.
+The Windows notification agent lives in a SEPARATE repository
+**MainTen-Agent**. Do NOT put agent code inside MainTen. Only the agent's
+backend API contract is defined here (see §4.4).
+
+Deliver the work in ITERATIONS (see §9). Each iteration must ship with
+passing tests, updated docs, and be runnable end-to-end.
 Never mix more than one iteration into a single commit/PR.
 
 ---
 
-## 1. Tech stack (you choose, but respect these constraints)
+## 1. Tech stack
 
 - Backend: any mainstream stack with a strong ORM + migrations ecosystem.
   Suggested: Python 3.12 + FastAPI + SQLAlchemy 2.0 + Alembic.
-- Frontend: server-rendered pages are preferred for simplicity
-  (Jinja2 + HTMX + Tailwind + Alpine.js is a good fit).
-  A SPA is acceptable only if you justify it.
+- Frontend: server-rendered pages preferred
+  (Jinja2 + HTMX + Tailwind + Alpine.js).
 - Database: PostgreSQL 16.
-- Auth: local username/password (argon2 or bcrypt) for ADMIN and TECHNICIAN.
-  USERS authenticate via signed magic-link tokens stored in secure cookies.
-  Design an abstraction so an AD/LDAP provider can be plugged in later
-  (no AD present today — implement a `LocalAuthProvider` now, stub
-  `AdAuthProvider` with a clear interface).
-- Deployment: Docker + docker-compose for production; systemd unit files
-  also provided for dev. Single host.
-- UI: modern, clean, responsive (desktop-first). Use TailwindCSS + a
-  component library (shadcn-style or Flowbite). Dark mode is optional.
-- i18n: Russian (default) + English. Use a standard i18n library
-  (e.g. Babel for Python or i18next for JS). All user-facing strings
-  must go through the translation layer.
-- Testing: unit + integration tests for every module. CI via GitHub Actions
-  running `pytest` (or equivalent) and linting on every push.
+- Auth:
+  - local username/password (argon2) for ADMIN and TECHNICIAN;
+  - USERS authenticate via signed magic-link tokens in secure cookies;
+  - design an `AuthProvider` abstraction so `AdAuthProvider` can be
+    plugged in later (no AD today — ship `LocalAuthProvider` only).
+- Deployment: Docker + docker-compose (production and dev).
+  Single host. systemd units also provided for local dev.
+- UI: modern, clean, responsive (desktop-first).
+  TailwindCSS + a component library (shadcn-style or Flowbite).
+- i18n: Russian (default) + English, via a standard library.
+  All user-facing strings go through the translation layer.
+- Testing: unit + integration tests for every module.
+  GitHub Actions runs lint + tests on every push and PR.
+- The container image MUST include `nmap` and `arp-scan` so the
+  network scanner wizard (see §5.1) works inside Docker.
+  The scanner container may run with `--network host`; document this
+  in the README and in docker-compose.
 
-## 2. Roles and users
+## 2. Roles
 
-- ADMIN — full access to configuration, users, computers, protocol,
-  reports, network scan, import.
-- TECHNICIAN — sees own daily schedule, fills maintenance cards,
-  receives escalations.
-- USER — end user tied to a computer. Authenticates via token link.
-  Can pick a maintenance date and view own PC history.
-- OBSERVER — read-only access to reports (e.g. management).
+- ADMIN — configuration, users, computers, protocol, reports,
+  network scan, import.
+- TECHNICIAN — own daily schedule, maintenance cards, escalations.
+- USER — end user tied to a computer; authenticates via token link;
+  picks a maintenance date; views own history.
+- OBSERVER — read-only access to reports.
 - "Manager" is NOT a role; it is a virtual property of a USER who has
-  more than one computer assigned. The user page must aggregate
-  multiple computers for such a user.
+  more than one computer assigned. The user page aggregates their
+  computers.
 
 ## 3. Data model (minimum)
 
@@ -68,63 +74,101 @@ Never mix more than one iteration into a single commit/PR.
   payload_json, sent_at, acknowledged_at)
 - `audit_log` (id, actor_user_id, action, entity, entity_id,
   before_json, after_json, created_at)
-- `settings` (key, value_json) — single-row config table for intervals,
-  notification window, SMTP, calendar, etc.
+- `settings` (key, value_json) — single-row config table.
+- `working_calendar` (id, date, is_working BOOL, kind enum:
+  workday|weekend|holiday|short_day, note_ru, note_en, source enum:
+  default|seed|admin) — fully editable by ADMIN.
+- `holidays` may be folded into `working_calendar`; do not create a
+  duplicate table.
 
 All historical maintenance records are kept forever. Never hard-delete
-maintenance_events or event_checks; use status transitions.
+`maintenance_events` or `event_checks`; use status transitions.
 
 ## 4. Business logic
 
-### 4.1 Scheduling
+### 4.1 Intervals
 
-- Default intervals: ROUND_THE_CLOCK computers → every 6 months;
-  others → every 12 months. Both intervals are configurable in settings.
+- Default: RTC computers → every 6 months; others → every 12 months.
+- Both intervals are configurable in settings.
 - `next_maintenance_due_at` = last completed maintenance + interval.
-- "Notification window" = configurable, default 20 days before due date.
-  During this window, the user is prompted to choose a date.
-- Available dates for the user:
-  - only future dates;
-  - only working days per Belarus production calendar
-    (Mon–Fri, excluding Belarusian public holidays);
-  - the date must be free for the assigned technician
-    (technician may perform at most 1 maintenance per day);
-  - window length is configurable (default 20 days, but the picker
-    should show the next N working days that are free).
-- The user picks a date → a `maintenance_event` is created with status
-  `planned` and assigned to a technician.
-- If the user does NOT pick a date within the window:
-  - send a daily reminder to the user via the local agent;
-  - escalate to the technician and the admin;
-  - after the window expires, shift the "it's time to choose" moment
-    forward by one month and repeat.
+  This is the "trigger date".
+
+### 4.2 Selection window and prompt start (IMPORTANT)
+
+Two independent settings, both configurable by ADMIN:
+
+- `selection_window_days` — how many days BEFORE the trigger date the
+  user is allowed to pick a date. Default = 20.
+- `prompt_start_offset_days` — how many days BEFORE the trigger date
+  the user starts receiving daily prompts. Default = half of
+  `selection_window_days` (i.e. 10 when window = 20).
+
+**Worked example (must be covered by an automated test):**
+- Computer is non-RTC → interval = 12 months.
+- Last maintenance done on **2025-09-23**.
+- Trigger date = **2026-09-23**.
+- `selection_window_days = 20` → the user may pick a date in the
+  range **[2026-09-03 .. 2026-09-23]** (working days only, see §4.3).
+- `prompt_start_offset_days = 10` → the user first receives the
+  prompt on **2026-09-13**, then daily until a date is chosen or the
+  window expires.
+- If the user does not pick a date by the end of the window →
+  escalate to technician and admin; shift the "time to choose"
+  moment forward by one month and repeat.
+
+The prompt-start rule must be implemented as:
+`prompt_start_date = trigger_date - prompt_start_offset_days`
+and NOT simply "start at the beginning of the window".
+
+### 4.3 Date picker rules
+
+Available dates for the user:
+- only future dates (strictly > today);
+- only working days per the **editable Belarus working calendar**
+  (see §5.1);
+- the assigned technician must be free
+  (default max 1 maintenance per day per technician);
+- the date must fall within `[trigger_date - selection_window_days .. trigger_date]`;
+- the picker shows only the N nearest free working days that satisfy
+  the above; N is derived from the window, not hardcoded.
+
+On pick: create `maintenance_event` (status `planned`) with a technician.
+On window expiry without a pick: escalation + shift by one month.
+Changing or cancelling an event must be recorded in `audit_log`.
+
+### 4.4 Technician execution
+
+- Day and week views; each event is a card with the full protocol
+  checklist. Per protocol item: checkbox (done / not done) + comment.
+- Attachments (photos/files) allowed per event.
+- Transitions: `planned → in_progress → done` (or `missed` with reason).
+- On `done`: recalculate `last_maintenance_at` and
+  `next_maintenance_due_at` for the computer.
 - Technicians can create out-of-schedule (unplanned) events manually.
-- Changing or cancelling an event must be recorded in `audit_log`.
 
-### 4.2 Maintenance execution
+### 4.5 Notifications (backend contract only)
 
-- A technician opens their day view. Each event is a card with the full
-  protocol checklist. For each protocol item, the technician marks a
-  checkbox (done / not done) and may add a comment.
-- Attachments (photos, files) are allowed per event.
-- On finish, the event transitions to `done`, `last_maintenance_at`
-  and `next_maintenance_due_at` for the computer are recalculated.
-
-### 4.3 Notifications
-
-- ONLY channel: a locally-installed Windows agent
-  (installed as a Windows service). Email is explicitly out of scope.
-- The agent polls the backend (or receives push via WebSocket) and
-  shows a Windows toast with a clickable link that opens the
-  user-specific date-picker page for the specific computer.
-- The notification target is always the specific user bound to the
-  specific computer — never broadcast.
-- Notifications must also be sent to technicians (daily schedule
-  digest) and admins (escalations, missed events).
+- Only channel: the **MainTen-Agent** Windows service running on the
+  user's PC. Email is explicitly out of scope.
+- The backend exposes a stable API contract for the agent (see below).
+  The agent implementation lives in the **MainTen-Agent** repository —
+  do NOT implement agent code inside MainTen.
+- Every notification is persisted in `notifications` for auditability.
 - Reminders to the user are sent once per day until a date is chosen.
-- Every notification is stored in `notifications` for auditability.
-- Provide a working Windows agent project (C#/.NET or Python + pywin32)
-  with an MSI/EXE installer and clear installation docs.
+- Notifications to technicians: daily schedule digest.
+- Notifications to admins: escalations, missed events.
+- Notification target is always the specific user bound to the
+  specific computer — never a broadcast.
+
+**Agent backend contract (freeze this early, version it):**
+- `POST /api/agent/register` — agent registers a machine with a token;
+  returns an `agent_id` + polling interval.
+- `GET  /api/agent/{agent_id}/pending` — returns pending notifications
+  (with clickable deep-link URL to the user's date-picker page).
+- `POST /api/agent/{agent_id}/ack` — acknowledge receipt / click.
+- `GET  /api/agent/health` — liveness.
+- Auth: mutual token (agent token issued by admin, stored server-side
+  hashed). All responses JSON. OpenAPI documented.
 
 ## 5. Pages
 
@@ -133,35 +177,46 @@ maintenance_events or event_checks; use status transitions.
 - CRUD for users, computers, technicians, observers.
 - Protocol editor: add/edit/delete/reorder/enable/disable items,
   RU + EN titles.
-- Settings page: intervals, notification window, working calendar,
-  Belarusian holidays, technician daily capacity (default 1).
+- **Working calendar editor (fully editable):**
+  - list view by month;
+  - toggle any date as working / non-working;
+  - mark holidays and short days with RU/EN notes;
+  - bulk import of a year's calendar (CSV/JSON);
+  - "reset to default Belarus calendar" action
+    (defaults are seeded, not hardcoded);
+  - all changes are written to `working_calendar` with
+    `source = admin` and logged in `audit_log`.
+- Settings page: intervals (6/12 by default), `selection_window_days`,
+  `prompt_start_offset_days`, technician daily capacity (default 1),
+  agent token issuance.
 - Import fleet from Excel (xlsx) with preview and validation.
-- Network scanner wizard: scan a subnet, detect hosts, pre-fill the
-  computers table with hostname/IP/OS when possible, let admin review
-  and confirm. Support re-running the scan to detect new devices.
+- **Network scanner wizard** (uses `nmap` inside the container):
+  - scan a subnet, detect live hosts, OS and hostname when possible;
+  - pre-fill the computers table;
+  - admin reviews and confirms;
+  - re-run supported to detect new devices;
+  - document `--network host` requirement in README.
 - Audit log viewer (filterable).
 
 ### 5.2 User
-- "Choose maintenance date" page: calendar with only selectable free
-  working days in the notification window.
-- "My computer" page: hostname, IP, OS, location, last maintenance
-  date, status of last maintenance, full history of past events
-  with checklists.
-- If the user owns multiple computers (manager case), show all of
-  them with per-computer pickers.
+- "Choose maintenance date" page: calendar showing only selectable
+  free working days inside the window.
+- "My computer" page: hostname, IP, OS, location, last maintenance,
+  status, and full history with checklists.
+- If the user owns multiple computers, show all with per-computer
+  pickers.
 
 ### 5.3 Technician
-- Day view (default = today) with one card per scheduled event.
+- Day view (default today) with one card per event.
 - Week view.
-- Event detail page: protocol checklist, comments, attachments,
-  "Start" / "Finish" buttons, ability to mark as missed with a reason.
-- Ability to create an unplanned event for a specific computer.
+- Event detail: checklist, comments, attachments, Start/Finish,
+  Mark-as-missed with reason.
+- Create unplanned event for a specific computer.
 
 ### 5.4 Reports (also visible to OBSERVER, read-only)
 - Overdue maintenance.
 - Technician load per day/week/month.
-- Fleet stats: total computers, RTC vs non-RTC, done this period,
-  missed this period, upcoming.
+- Fleet stats (total, RTC vs non-RTC, done/missed/upcoming this period).
 - Timeline / Gantt of scheduled maintenance.
 - Configurable charts (bar, pie, line) with date-range filters.
 - Export to Excel / CSV / PDF.
@@ -169,85 +224,91 @@ maintenance_events or event_checks; use status transitions.
 
 ## 6. Non-functional
 
-- Fleet size target: ~300 computers. Concurrent users: ~30.
-  Design for this scale — no premature optimization, but avoid
-  obviously quadratic queries.
+- Target: ~300 computers, ~30 concurrent users.
 - HTTPS in production (reverse proxy is fine).
-- No 152-FZ / GDPR-specific compliance required, but store passwords
-  hashed and never log secrets.
-- Backups: out of scope for v1, but expose a documented `pg_dump`
-  helper script.
-- Log every mutating action to `audit_log`.
-- Mobile version is NOT required (desktop-first responsive is enough).
+- Store passwords hashed; never log secrets.
+- Backups: out of scope for v1; provide a documented `pg_dump` helper.
+- Every mutating action is written to `audit_log`.
+- Mobile version is not required (desktop-first responsive is enough).
 
-## 7. Repository & process
+## 7. Repositories
 
-- Repo already exists on GitHub. Push all work there.
-- Provide a `README.md` with: architecture overview, DB schema diagram
-  (Mermaid), setup instructions (docker + systemd), and a "how to run
-  tests" section.
-- Provide OpenAPI spec for the backend (auto-generated is fine).
+- **MainTen** (this repo) — the web application.
+  Must include: architecture overview in README, Mermaid DB schema
+  diagram, setup (docker + systemd), "how to run tests", OpenAPI spec.
+- **MainTen-Agent** (separate repo, out of scope here) —
+  Windows service + toast notifications + clickable deep-links.
+  MainTen only defines and implements the backend API contract
+  from §4.5. Document the contract in `docs/agent-api.md`.
+
+## 8. Process
+
 - GitHub Actions: lint + tests on every push and PR.
-- Every iteration must end with a green CI and a working
-  `docker-compose up`.
+- Every iteration ends with a green CI and a working
+  `docker-compose up` from a clean checkout.
+- If a requirement is ambiguous: choose the simplest reasonable
+  interpretation, write it to `docs/decisions.md`, continue.
+  Do not stop to ask questions unless the decision is irreversible.
 
-## 8. Iterations (do them strictly in this order)
+## 9. Iterations (strict order)
 
-**Iteration 1 — Skeleton.**
+**Iteration 1 — Skeleton.** ✅ (already done by the user)
 Repo layout, backend bootstrap, PostgreSQL via docker-compose,
-Alembic migrations for the full schema from §3, settings table,
-local auth for ADMIN/TECHNICIAN, magic-link auth for USER,
-basic layout with i18n (ru/en), empty admin dashboard.
-Tests: auth flows, migrations apply cleanly.
+Alembic migrations for the full schema from §3 (including
+`working_calendar`), settings table, local auth for ADMIN/TECHNICIAN,
+magic-link auth for USER, basic layout with i18n (ru/en), empty admin
+dashboard. Tests: auth flows, migrations apply cleanly.
 
 **Iteration 2 — Admin CRUD + Excel import.**
 Users, computers, technicians CRUD. Excel import with preview.
-Audit log table populated. Tests for CRUD and import.
+Audit log populated. Tests for CRUD and import.
 
-**Iteration 3 — Protocol editor + settings.**
+**Iteration 3 — Protocol editor + settings + calendar editor.**
 Protocol items CRUD with ordering and RU/EN titles.
-Settings page for intervals, notification window, capacity,
-Belarus calendar. Tests for settings validation.
+Settings page for intervals, `selection_window_days`,
+`prompt_start_offset_days`, technician capacity.
+Full **working calendar editor** (CRUD, seed defaults for Belarus,
+bulk import, reset). Tests for settings validation and calendar
+edit audit trail.
 
 **Iteration 4 — Scheduling engine + user page.**
-Compute `next_maintenance_due_at`. Open the notification window.
-User page with the date picker (working days, free technician
-slots, future only). Create `maintenance_event`. Tests for
-the scheduling rules (RTC vs non-RTC, window, escalation timing).
+Compute `next_maintenance_due_at` (trigger date).
+Implement prompt-start rule from §4.2 and cover the worked example
+with a test. User page with the date picker (working days, free
+technician slots, future only, window bounds). Create
+`maintenance_event`. Tests for RTC vs non-RTC, window math,
+prompt-start offset, escalation timing.
 
 **Iteration 5 — Technician pages.**
-Day/week views, event card with protocol checklist, comments,
-attachments, start/finish transitions, unplanned events.
-Tests for status transitions and recalculation of next due date.
+Day/week views, event card with checklist, comments, attachments,
+start/finish transitions, unplanned events. Tests for status
+transitions and recalculation of next due date.
 
-**Iteration 6 — Notifications + Windows agent.**
-Backend notification service, `notifications` table persistence,
-API for the agent. Windows agent project (service + toast + clickable
-link). Daily reminders, escalations. Tests for notification rules
-(idempotency per day, escalation triggers).
+**Iteration 6 — Notifications API + agent contract.**
+Notification service, `notifications` persistence, API from §4.5,
+`docs/agent-api.md`, daily reminders, escalations, idempotency per
+day. Tests for notification rules. NO agent code inside MainTen —
+that lives in MainTen-Agent.
 
 **Iteration 7 — Reports + observer role.**
 All reports from §5.4, filters, charts, exports, activity log.
 Observer role wired to read-only views. Tests for report queries.
 
 **Iteration 8 — Network scanner wizard.**
-Subnet scan, host discovery, OS/hostname detection, review UI,
-merge into computers table. Tests with mocked scan results.
+nmap-based subnet scan inside the container
+(`--network host` documented), host discovery, OS/hostname detection,
+review UI, merge into computers table, re-run to detect new devices.
+Tests with mocked scan results.
 
 **Iteration 9 — Hardening.**
-Rate limiting, error pages, structured logging, final README
-polish, demo seed data, end-to-end smoke test in CI.
+Rate limiting, error pages, structured logging, README polish,
+demo seed data, end-to-end smoke test in CI.
 
 Each iteration must:
-1. Update the README with what was added.
+1. Update README with what was added.
 2. Keep `docker-compose up` working from a clean checkout.
 3. Pass all tests in CI.
 4. Not break previous iterations.
 
-Start with Iteration 1 only. Do not proceed to Iteration 2 until
-Iteration 1 is committed, CI is green, and the app runs locally.
-
-If any requirement is ambiguous, choose the simplest reasonable
-interpretation, document the decision in `docs/decisions.md`,
-and continue. Do not stop to ask questions unless the decision
-would be irreversible.
+Start with Iteration 2 only. Do not proceed to Iteration 3 until
+Iteration 2 is committed, CI is green, and the app runs locally.
