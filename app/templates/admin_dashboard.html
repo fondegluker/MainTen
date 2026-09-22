@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}{{ translate('admin_dashboard', locale) }} - CFMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-3xl font-bold text-gray-900">{{ translate('admin_dashboard', locale) }}</h1>
+        <div class="text-sm text-gray-500">
+            {{ translate('welcome', locale) }}, <span class="font-semibold text-gray-800">{{ current_user.username }}</span>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+            <div class="p-3 bg-blue-100 text-blue-600 rounded-lg">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                </svg>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-gray-500">{{ translate('total_computers', locale) }}</div>
+                <div class="text-2xl font-bold text-gray-900">{{ stats.total_computers }}</div>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+            <div class="p-3 bg-yellow-100 text-yellow-600 rounded-lg">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-gray-500">{{ translate('scheduled_events', locale) }}</div>
+                <div class="text-2xl font-bold text-gray-900">{{ stats.scheduled_events }}</div>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+            <div class="p-3 bg-green-100 text-green-600 rounded-lg">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-gray-500">{{ translate('completed_events', locale) }}</div>
+                <div class="text-2xl font-bold text-gray-900">{{ stats.completed_events }}</div>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+            <div class="p-3 bg-red-100 text-red-600 rounded-lg">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-gray-500">{{ translate('overdue_events', locale) }}</div>
+                <div class="text-2xl font-bold text-gray-900">{{ stats.overdue_events }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

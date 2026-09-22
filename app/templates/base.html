@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="{{ locale }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ translate('app_title', locale) }}{% endblock %}</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 flex flex-col font-sans">
+    <!-- Navbar -->
+    <nav class="bg-slate-800 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="/" class="font-bold text-xl flex items-center gap-2">
+                        <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>CFMS</span>
+                    </a>
+                    {% if current_user %}
+                        {% if current_user.role.value == "ADMIN" %}
+                            <a href="/admin/dashboard" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('admin_dashboard', locale) }}</a>
+                        {% endif %}
+                        {% if current_user.role.value in ["ADMIN", "TECHNICIAN"] %}
+                            <a href="/technician/schedule" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('technician_schedule', locale) }}</a>
+                        {% endif %}
+                        {% if current_user.role.value in ["ADMIN", "OBSERVER"] %}
+                            <a href="/reports" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('reports', locale) }}</a>
+                        {% endif %}
+                        <a href="/user/my-computers" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('my_computers', locale) }}</a>
+                    {% endif %}
+                </div>
+
+                <div class="flex items-center space-x-4">
+                    <!-- Language Switcher -->
+                    <div class="flex items-center space-x-2 text-sm bg-slate-700 px-3 py-1 rounded-md">
+                        <a href="/set-locale?locale=ru" class="{% if locale == 'ru' %}text-indigo-300 font-bold underline{% else %}text-gray-300 hover:text-white{% endif %}">RU</a>
+                        <span class="text-gray-400">|</span>
+                        <a href="/set-locale?locale=en" class="{% if locale == 'en' %}text-indigo-300 font-bold underline{% else %}text-gray-300 hover:text-white{% endif %}">EN</a>
+                    </div>
+
+                    {% if current_user %}
+                        <div class="text-sm text-gray-300 flex items-center gap-2">
+                            <span class="font-medium text-white">{{ current_user.username }}</span>
+                            <span class="text-xs bg-slate-600 px-2 py-0.5 rounded text-indigo-200">{{ current_user.role.value }}</span>
+                        </div>
+                        <a href="/auth/logout" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition">{{ translate('logout', locale) }}</a>
+                    {% else %}
+                        <a href="/auth/login" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition">{{ translate('login', locale) }}</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-800 text-gray-400 text-sm py-4 border-t border-slate-700">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            &copy; 2025 CFMS - {{ translate('app_title', locale) }}
+        </div>
+    </footer>
+</body>
+</html>

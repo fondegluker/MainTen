@@ -1,0 +1,5 @@
+[line-length]
+max-line-length = 120
+
+[lint]
+ignore = ["B008", "RUF013", "UP007", "UP006"]
