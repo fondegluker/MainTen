@@ -31,6 +31,16 @@ Upon initial database migration (`alembic upgrade head`), a default administrato
 
 ---
 
+## Helper Scripts
+
+The project includes shell scripts for Docker setup and environment management:
+
+- `run.sh`: Automated local environment setup script. Clones/updates the repository branch, builds Docker containers, and launches services on `http://localhost:8000`.
+- `stop.sh`: Gracefully stops running project Docker containers while preserving Postgres volume data (pass `-v` flag to wipe data).
+- `install_docker.sh`: Shell script to install Docker Engine and the Docker Compose v2 plugin on Ubuntu.
+
+---
+
 ## Features (Iteration 1 & 2)
 
 - **Admin Management**:

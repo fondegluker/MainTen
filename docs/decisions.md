@@ -22,6 +22,13 @@ No gaps were identified in Step 0 audit.
   - **Role**: `ADMIN`
 - Password is stored hashed using `argon2` via `LocalAuthProvider`.
 
+## Helper Scripts Integration
+
+The repository integrates shell scripts for deployment and local testing:
+- `run.sh`: Clones/updates repository, builds Docker containers, and runs web service on port 8000.
+- `stop.sh`: Stops running containers while preserving PostgreSQL data volumes.
+- `install_docker.sh`: Installs Docker Engine and Docker Compose v2 on Ubuntu.
+
 ## Iteration 2 Architecture & Design Decisions
 
 ### Admin CRUD & Audit Logging
