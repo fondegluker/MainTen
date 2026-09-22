@@ -17,11 +17,53 @@
     </div>
     {% endif %}
 
+    <!-- Filter Form -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <form method="GET" action="/admin/computers" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Поиск</label>
+                <input type="text" name="q" value="{{ search or '' }}" placeholder="Hostname / IP..."
+                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Кабинет</label>
+                <input type="text" name="location" value="{{ location_filter or '' }}" placeholder="Расположение..."
+                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">24/7 (RTC)</label>
+                <select name="rtc" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Все</option>
+                    <option value="yes" {% if rtc_filter == 'yes' %}selected{% endif %}>Да (24/7)</option>
+                    <option value="no" {% if rtc_filter == 'no' %}selected{% endif %}>Нет</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Владелец</label>
+                <select name="owner_id" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Все владельцы</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if owner_filter == u.id %}selected{% endif %}>{{ u.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex items-end space-x-2">
+                <button type="submit" class="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md text-sm transition">Фильтр</button>
+                <a href="/admin/computers" class="py-2 px-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md text-sm transition">Сброс</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Table -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('hostname', locale) }}</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <a href="/admin/computers?sort_by=hostname&sort_order={% if sort_by == 'hostname' and sort_order == 'asc' %}desc{% else %}asc{% endif %}&q={{ search or '' }}&location={{ location_filter or '' }}&rtc={{ rtc_filter or '' }}&owner_id={{ owner_filter or '' }}">
+                            {{ translate('hostname', locale) }} {% if sort_by == 'hostname' %}{{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}
+                        </a>
+                    </th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('ip_address', locale) }}</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('os', locale) }}</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('location', locale) }}</th>
@@ -58,9 +100,28 @@
                         </form>
                     </td>
                 </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">Компьютеры не найдены.</td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
+        <div class="text-sm text-gray-500">Страница {{ page }} из {{ total_pages }} (Всего: {{ total_count }})</div>
+        <div class="flex space-x-2">
+            {% if page > 1 %}
+                <a href="/admin/computers?page={{ page - 1 }}&q={{ search or '' }}&location={{ location_filter or '' }}&rtc={{ rtc_filter or '' }}&owner_id={{ owner_filter or '' }}&sort_by={{ sort_by }}&sort_order={{ sort_order }}" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300">Назад</a>
+            {% endif %}
+            {% if page < total_pages %}
+                <a href="/admin/computers?page={{ page + 1 }}&q={{ search or '' }}&location={{ location_filter or '' }}&rtc={{ rtc_filter or '' }}&owner_id={{ owner_filter or '' }}&sort_by={{ sort_by }}&sort_order={{ sort_order }}" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300">Вперед</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

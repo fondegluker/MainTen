@@ -17,12 +17,54 @@
     </div>
     {% endif %}
 
+    <!-- Filter Form -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <form method="GET" action="/admin/users" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Поиск</label>
+                <input type="text" name="q" value="{{ search or '' }}" placeholder="Имя или email..."
+                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Роль</label>
+                <select name="role" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Все роли</option>
+                    <option value="ADMIN" {% if role_filter == 'ADMIN' %}selected{% endif %}>{{ translate('role_admin', locale) }}</option>
+                    <option value="TECHNICIAN" {% if role_filter == 'TECHNICIAN' %}selected{% endif %}>{{ translate('role_technician', locale) }}</option>
+                    <option value="USER" {% if role_filter == 'USER' %}selected{% endif %}>{{ translate('role_user', locale) }}</option>
+                    <option value="OBSERVER" {% if role_filter == 'OBSERVER' %}selected{% endif %}>{{ translate('role_observer', locale) }}</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Статус</label>
+                <select name="status" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Все</option>
+                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>{{ translate('active', locale) }}</option>
+                    <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>{{ translate('inactive', locale) }}</option>
+                </select>
+            </div>
+            <div class="flex items-end space-x-2">
+                <button type="submit" class="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md text-sm transition">Фильтр</button>
+                <a href="/admin/users" class="py-2 px-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md text-sm transition">Сброс</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Table -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ID</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('username', locale) }}</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <a href="/admin/users?sort_by=id&sort_order={% if sort_by == 'id' and sort_order == 'asc' %}desc{% else %}asc{% endif %}&q={{ search or '' }}&role={{ role_filter or '' }}&status={{ status_filter or '' }}">
+                            ID {% if sort_by == 'id' %}{{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}
+                        </a>
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <a href="/admin/users?sort_by=username&sort_order={% if sort_by == 'username' and sort_order == 'asc' %}desc{% else %}asc{% endif %}&q={{ search or '' }}&role={{ role_filter or '' }}&status={{ status_filter or '' }}">
+                            {{ translate('username', locale) }} {% if sort_by == 'username' %}{{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}
+                        </a>
+                    </th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('email_or_login', locale) }}</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('role', locale) }}</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('status', locale) }}</th>
@@ -47,18 +89,43 @@
                             <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">{{ translate('inactive', locale) }}</span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         <a href="/admin/users/{{ u.id }}/edit" class="text-indigo-600 hover:text-indigo-900">{{ translate('edit', locale) }}</a>
-                        <form action="/admin/users/{{ u.id }}/toggle-active" method="POST" class="inline">
+                        {% if u.role.value in ['ADMIN', 'TECHNICIAN'] %}
+                            <a href="/admin/users/{{ u.id }}/reset-password" class="text-amber-600 hover:text-amber-900">Сброс пароля</a>
+                        {% endif %}
+                        {% if u.role.value == 'USER' %}
+                            <a href="/admin/users/{{ u.id }}/magic-link" class="text-purple-600 hover:text-purple-900">Magic-link</a>
+                        {% endif %}
+                        <form action="/admin/users/{{ u.id }}/deactivate" method="POST" class="inline">
                             <button type="submit" class="text-sm {% if u.is_active %}text-red-600 hover:text-red-900{% else %}text-green-600 hover:text-green-900{% endif %}">
                                 {% if u.is_active %}Деактивировать{% else %}Активировать{% endif %}
                             </button>
                         </form>
                     </td>
                 </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">Пользователи не найдены.</td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
+        <div class="text-sm text-gray-500">Страница {{ page }} из {{ total_pages }} (Всего: {{ total_count }})</div>
+        <div class="flex space-x-2">
+            {% if page > 1 %}
+                <a href="/admin/users?page={{ page - 1 }}&q={{ search or '' }}&role={{ role_filter or '' }}&status={{ status_filter or '' }}&sort_by={{ sort_by }}&sort_order={{ sort_order }}" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300">Назад</a>
+            {% endif %}
+            {% if page < total_pages %}
+                <a href="/admin/users?page={{ page + 1 }}&q={{ search or '' }}&role={{ role_filter or '' }}&status={{ status_filter or '' }}&sort_by={{ sort_by }}&sort_order={{ sort_order }}" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300">Вперед</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

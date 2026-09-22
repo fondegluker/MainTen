@@ -41,19 +41,26 @@ The project includes shell scripts for Docker setup and environment management:
 
 ---
 
-## Features (Iteration 1 & 2)
+## Iteration 2 Features & Scope
 
-- **Admin Management**:
-  - Full CRUD for Users (ADMIN, TECHNICIAN, USER, OBSERVER) with active/inactive toggling.
-  - Full CRUD for Computers with IP, MAC, OS, location, owner assignment, and 24/7 (RTC) flags.
-  - Technicians directory view.
-- **Excel Fleet Import**:
-  - Upload `.xlsx` fleet spreadsheet with preview & validation.
-  - Validates hostnames, matches user owners by username or email, handles existing record updates, and highlights errors/warnings before final commit.
+- **Admin User Management**:
+  - CRUD for Users across `ADMIN`, `TECHNICIAN`, `USER`, and `OBSERVER` roles.
+  - Filtering by role, active/inactive status, and username search.
+  - Pagination, column sorting, password reset for local auth roles (`ADMIN`, `TECHNICIAN`), re-issuing magic links for `USER` role, and soft-deactivation.
+- **Admin Computer Fleet Management**:
+  - CRUD for Computers with fields: `hostname`, `ip`, `mac`, `os`, `location`, `owner_user_id`, `is_round_the_clock`, `last_maintenance_at`, `next_maintenance_due_at`, `status`, and `notes`.
+  - Filtering by location, 24/7 (RTC) status, user owner, and search.
+  - Strict validations: unique hostname, valid IPv4/IPv6 format, and standard MAC address regex format (`00:11:22:33:44:55`).
+  - Single/multi computer ownership ("Manager" virtual property).
+- **Technicians Management**:
+  - Filtered directory view for `TECHNICIAN` users.
+  - Configurable daily maintenance capacity setting per technician (default 1).
+- **Excel Fleet Import (.xlsx)**:
+  - Downloadable Excel import template (`/admin/import/template`).
+  - Spreadsheet parsing and preview table displaying per-row status (`valid`, `warning`, `error`) and diff classification (`new`, `update`, `conflict`).
+  - Single-transaction atomic database commit with hard error blocking (rejects whole file when invalid rows exist).
 - **Audit Logging**:
-  - Automatic `audit_log` records for all mutating operations (user/computer creation, edit, toggle, deletion, and Excel import).
-- **Working Calendar**:
-  - `working_calendar` table pre-seeded with 2025–2026 Belarus working days, weekends, and public holidays (`holiday` kind).
+  - Every mutating operation (`create_user`, `update_user`, `deactivate_user`, `reset_password`, `reissue_magic_link`, `create_computer`, `update_computer`, `delete_computer`, `update_technician_capacity`, `excel_import_fleet`) records actor ID, entity, entity ID, and before/after JSON states into `audit_log`.
 
 ---
 

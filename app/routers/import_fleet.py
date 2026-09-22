@@ -4,12 +4,14 @@ from typing import Any
 
 import openpyxl
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import require_admin
 from app.core.database import get_db
+from app.core.validators import validate_ip, validate_mac
 from app.models.models import Computer, User
 from app.routers.web import context_with_defaults
 from app.services.audit_service import log_audit
@@ -17,8 +19,7 @@ from app.services.audit_service import log_audit
 router = APIRouter(prefix="/admin/import", tags=["admin-import"])
 templates = Jinja2Templates(directory="app/templates")
 
-# In-memory session preview store for upload previews
-IMPORT_STAGING_CACHE: dict[str, list[dict[str, Any]]] = {}
+IMPORT_STAGING_CACHE: dict[str, dict[str, Any]] = {}
 
 def parse_excel_rows(file_bytes: bytes) -> list[dict[str, Any]]:
     workbook = openpyxl.load_workbook(filename=io.BytesIO(file_bytes), data_only=True)
@@ -51,6 +52,34 @@ def import_page(
         context_with_defaults(request, current_user, {"preview_rows": None, "error": error})
     )
 
+@router.get("/template")
+def download_import_template(
+    current_user: User = Depends(require_admin)
+):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Fleet Import Template"
+
+    headers = ["hostname", "ip", "mac", "os", "location", "owner", "is_round_the_clock", "notes"]
+    ws.append(headers)
+
+    # Example row
+    example_row = ["PC-OFFICE-101", "192.168.1.50", "00:11:22:33:44:55", "Windows 11", "Room 302", "admin", "нет", "Рабочий ПК"]
+    ws.append(example_row)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    headers_resp = {
+        'Content-Disposition': 'attachment; filename="fleet_import_template.xlsx"'
+    }
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers_resp
+    )
+
 @router.post("/preview", response_class=HTMLResponse)
 async def preview_import(
     request: Request,
@@ -74,6 +103,8 @@ async def preview_import(
 
     preview_rows = []
     valid_rows_for_import = []
+    seen_hostnames_in_file = set()
+    has_errors = False
 
     for r in raw_rows:
         hostname = r.get("hostname") or r.get("компьютер") or r.get("имя хоста") or ""
@@ -82,15 +113,27 @@ async def preview_import(
         os_name = r.get("os") or r.get("операционная система") or ""
         location = r.get("location") or r.get("кабинет") or r.get("расположение") or ""
         owner_text = r.get("owner") or r.get("владелец") or r.get("пользователь") or ""
+        notes = r.get("notes") or r.get("заметки") or ""
         rtc_val = str(r.get("is_round_the_clock") or r.get("24/7") or "").lower()
 
         is_rtc = rtc_val in ("1", "true", "да", "yes")
 
         errors = []
         warning = None
+        diff_type = "new"
 
         if not hostname:
             errors.append("Отсутствует hostname")
+        elif hostname.lower() in seen_hostnames_in_file:
+            errors.append(f"Дубликат hostname '{hostname}' в файле")
+        else:
+            seen_hostnames_in_file.add(hostname.lower())
+
+        if ip and not validate_ip(ip):
+            errors.append(f"Некорректный IP '{ip}'")
+
+        if mac and not validate_mac(mac):
+            errors.append(f"Некорректный MAC '{mac}'")
 
         # Owner lookup
         owner_user_id = None
@@ -101,11 +144,15 @@ async def preview_import(
             else:
                 warning = f"Пользователь '{owner_text}' не найден (будет не назначен)"
 
-        # Check existing hostname
+        # Diff detection
         if hostname and hostname.lower() in existing_computers:
-            warning = f"Компьютер '{hostname}' уже существует (будет обновлен)"
+            diff_type = "update"
+            if not warning:
+                warning = f"Компьютер '{hostname}' уже существует (будет обновлен)"
 
         is_valid = len(errors) == 0
+        if not is_valid:
+            has_errors = True
 
         parsed_row = {
             "row_idx": r["_row_idx"],
@@ -117,6 +164,8 @@ async def preview_import(
             "owner_text": owner_text,
             "owner_user_id": owner_user_id,
             "is_round_the_clock": is_rtc,
+            "notes": notes,
+            "diff_type": diff_type,
             "is_valid": is_valid,
             "errors": errors,
             "warning": warning,
@@ -126,13 +175,18 @@ async def preview_import(
             valid_rows_for_import.append(parsed_row)
 
     file_token = str(uuid.uuid4())
-    IMPORT_STAGING_CACHE[file_token] = valid_rows_for_import
+    IMPORT_STAGING_CACHE[file_token] = {
+        "raw_filename": file.filename,
+        "rows": valid_rows_for_import,
+        "has_errors": has_errors
+    }
 
     return templates.TemplateResponse(
         "admin/import.html",
         context_with_defaults(request, current_user, {
             "preview_rows": preview_rows,
             "file_token": file_token,
+            "has_errors": has_errors,
             "error": None
         })
     )
@@ -143,46 +197,63 @@ def confirm_import(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    staged_rows = IMPORT_STAGING_CACHE.pop(file_token, None)
-    if not staged_rows:
+    staging_data = IMPORT_STAGING_CACHE.pop(file_token, None)
+    if not staging_data:
         return RedirectResponse(url="/admin/import?error=Сессия+импорта+истекла", status_code=status.HTTP_302_FOUND)
+
+    if staging_data.get("has_errors"):
+        return RedirectResponse(url="/admin/import?error=Файл+содержит+критические+ошибки+и+отклонен", status_code=status.HTTP_302_FOUND)
+
+    staged_rows = staging_data["rows"]
+    raw_filename = staging_data["raw_filename"]
 
     imported_count = 0
     updated_count = 0
 
-    for r in staged_rows:
-        hostname = r["hostname"]
-        comp = db.query(Computer).filter(Computer.hostname == hostname).first()
-        if comp:
-            comp.ip = r["ip"] or comp.ip
-            comp.mac = r["mac"] or comp.mac
-            comp.os = r["os"] or comp.os
-            comp.location = r["location"] or comp.location
-            comp.owner_user_id = r["owner_user_id"] or comp.owner_user_id
-            comp.is_round_the_clock = r["is_round_the_clock"]
-            updated_count += 1
-        else:
-            comp = Computer(
-                hostname=hostname,
-                ip=r["ip"] or None,
-                mac=r["mac"] or None,
-                os=r["os"] or None,
-                location=r["location"] or None,
-                owner_user_id=r["owner_user_id"],
-                is_round_the_clock=r["is_round_the_clock"],
-                status="active"
-            )
-            db.add(comp)
-            imported_count += 1
-
-    db.commit()
+    try:
+        with db.begin_nested():
+            for r in staged_rows:
+                hostname = r["hostname"]
+                comp = db.query(Computer).filter(func.lower(Computer.hostname) == hostname.lower()).first()
+                if comp:
+                    comp.ip = r["ip"] or comp.ip
+                    comp.mac = r["mac"] or comp.mac
+                    comp.os = r["os"] or comp.os
+                    comp.location = r["location"] or comp.location
+                    comp.owner_user_id = r["owner_user_id"] or comp.owner_user_id
+                    comp.is_round_the_clock = r["is_round_the_clock"]
+                    comp.notes = r["notes"] or comp.notes
+                    updated_count += 1
+                else:
+                    comp = Computer(
+                        hostname=hostname,
+                        ip=r["ip"] or None,
+                        mac=r["mac"] or None,
+                        os=r["os"] or None,
+                        location=r["location"] or None,
+                        owner_user_id=r["owner_user_id"],
+                        is_round_the_clock=r["is_round_the_clock"],
+                        notes=r["notes"] or None,
+                        status="active"
+                    )
+                    db.add(comp)
+                    imported_count += 1
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return RedirectResponse(url=f"/admin/import?error=Ошибка+транзакции+импорта:+{exc}", status_code=status.HTTP_302_FOUND)
 
     log_audit(
         db=db,
         actor_user_id=current_user.id,
         action="excel_import_fleet",
         entity="computers",
-        after={"imported_count": imported_count, "updated_count": updated_count}
+        after={
+            "raw_filename": raw_filename,
+            "imported_count": imported_count,
+            "updated_count": updated_count,
+            "total_processed": len(staged_rows)
+        }
     )
 
     return RedirectResponse(
