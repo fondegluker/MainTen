@@ -18,6 +18,22 @@ CFMS is built with a server-rendered web stack and modular architecture:
 
 ---
 
+## Features (Iteration 1 & 2)
+
+- **Admin Management**:
+  - Full CRUD for Users (ADMIN, TECHNICIAN, USER, OBSERVER) with active/inactive toggling.
+  - Full CRUD for Computers with IP, MAC, OS, location, owner assignment, and 24/7 (RTC) flags.
+  - Technicians directory view.
+- **Excel Fleet Import**:
+  - Upload `.xlsx` fleet spreadsheet with preview & validation.
+  - Validates hostnames, matches user owners by username or email, handles existing record updates, and highlights errors/warnings before final commit.
+- **Audit Logging**:
+  - Automatic `audit_log` records for all mutating operations (user/computer creation, edit, toggle, deletion, and Excel import).
+- **Working Calendar**:
+  - `working_calendar` table pre-seeded with 2025–2026 Belarus working days, weekends, and public holidays (`holiday` kind).
+
+---
+
 ## Database Schema
 
 ```mermaid

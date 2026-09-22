@@ -26,6 +26,10 @@
                     {% if current_user %}
                         {% if current_user.role.value == "ADMIN" %}
                             <a href="/admin/dashboard" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('admin_dashboard', locale) }}</a>
+                            <a href="/admin/users" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('users_management', locale) }}</a>
+                            <a href="/admin/computers" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('computers_management', locale) }}</a>
+                            <a href="/admin/technicians" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('technicians_management', locale) }}</a>
+                            <a href="/admin/import" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('import_fleet', locale) }}</a>
                         {% endif %}
                         {% if current_user.role.value in ["ADMIN", "TECHNICIAN"] %}
                             <a href="/technician/schedule" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('technician_schedule', locale) }}</a>
