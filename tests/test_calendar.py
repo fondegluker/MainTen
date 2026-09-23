@@ -18,6 +18,7 @@ from app.repositories.calendar_repository import CalendarRepository
 engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 @pytest.fixture(scope="module")
 def alembic_db():
     alembic_cfg = Config("alembic.ini")
@@ -31,6 +32,7 @@ def alembic_db():
     if os.path.exists("./test_calendar.db"):
         os.remove("./test_calendar.db")
 
+
 @pytest.fixture
 def db_session(alembic_db):
     connection = engine.connect()
@@ -40,6 +42,7 @@ def db_session(alembic_db):
     session.close()
     transaction.rollback()
     connection.close()
+
 
 def test_calendar_seed_data(db_session):
     repo = CalendarRepository(db_session)
@@ -63,17 +66,14 @@ def test_calendar_seed_data(db_session):
     assert jan4.is_working is False
     assert jan4.kind == DayKind.WEEKEND
 
+
 def test_calendar_date_uniqueness(db_session):
-    duplicate = WorkingCalendar(
-        date=date(2025, 1, 1),
-        is_working=True,
-        kind=DayKind.WORKDAY,
-        description="Duplicate"
-    )
+    duplicate = WorkingCalendar(date=date(2025, 1, 1), is_working=True, kind=DayKind.WORKDAY, description="Duplicate")
     db_session.add(duplicate)
     with pytest.raises(IntegrityError):
         db_session.commit()
     db_session.rollback()
+
 
 def test_calendar_repository_range(db_session):
     repo = CalendarRepository(db_session)
@@ -84,5 +84,5 @@ def test_calendar_repository_range(db_session):
     assert date(2025, 1, 1) not in working_dates
     assert date(2025, 1, 2) not in working_dates
     assert date(2025, 1, 3) in working_dates
-    assert date(2025, 1, 7) not in working_dates # Orthodox Christmas
+    assert date(2025, 1, 7) not in working_dates  # Orthodox Christmas
     assert date(2025, 1, 8) in working_dates

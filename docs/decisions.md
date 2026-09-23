@@ -2,6 +2,7 @@
 
 ## Fleet Import Template & Single Source of Truth
 
+- Chosen `app.importer` as the canonical Python package name (resolving reserved keyword conflict with `import`).
 - Created `app/importer/schema.py` containing `FLEET_IMPORT_COLUMNS` schema constant as the single source of truth for column titles, database field mappings, data types, required flags, default values, example values, and localized descriptions.
 - Created `app/importer/template.py` exposing `build_template() -> bytes` and `TEMPLATE_FILENAME = "fleet_import_template.xlsx"`.
 - Generated and committed canonical asset at `app/importer/assets/fleet_import_template.xlsx`.

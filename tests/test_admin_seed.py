@@ -14,6 +14,7 @@ TEST_DB_URL = "sqlite:///./test_admin_seed.db"
 engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 @pytest.fixture(scope="module")
 def setup_admin_db():
     Base.metadata.create_all(bind=engine)
@@ -37,6 +38,7 @@ def setup_admin_db():
     Base.metadata.drop_all(bind=engine)
     if os.path.exists("./test_admin_seed.db"):
         os.remove("./test_admin_seed.db")
+
 
 def test_default_admin_seed(setup_admin_db):
     admin = setup_admin_db.query(User).filter(User.username == "admin").first()

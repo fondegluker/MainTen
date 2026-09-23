@@ -38,9 +38,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Ruff Linter
+      - name: Run Ruff Linter & Format Check
         run: |
           ruff check .
+          ruff format --check .
 
       - name: Run Alembic Migrations
         env:

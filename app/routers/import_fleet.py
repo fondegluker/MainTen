@@ -24,6 +24,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 IMPORT_STAGING_CACHE: dict[str, dict[str, Any]] = {}
 
+
 def parse_excel_rows(file_bytes: bytes) -> list[dict[str, Any]]:
     workbook = openpyxl.load_workbook(filename=io.BytesIO(file_bytes), data_only=True)
     sheet = workbook["Computers"] if "Computers" in workbook.sheetnames else workbook.active
@@ -45,43 +46,39 @@ def parse_excel_rows(file_bytes: bytes) -> list[dict[str, Any]]:
         parsed.append(row_dict)
     return parsed
 
+
 @router.get("", response_class=HTMLResponse)
-def import_page(
-    request: Request,
-    error: str | None = None,
-    current_user: User = Depends(require_admin)
-):
+def import_page(request: Request, error: str | None = None, current_user: User = Depends(require_admin)):
     return templates.TemplateResponse(
-        "admin/import.html",
-        context_with_defaults(request, current_user, {"preview_rows": None, "error": error})
+        "admin/import.html", context_with_defaults(request, current_user, {"preview_rows": None, "error": error})
     )
 
+
 @router.get("/template")
-def download_import_template(
-    current_user: User = Depends(require_admin)
-):
+def download_import_template(current_user: User = Depends(require_admin)):
     template_bytes = build_template()
-    headers_resp = {
-        'Content-Disposition': f'attachment; filename="{TEMPLATE_FILENAME}"'
-    }
+    headers_resp = {"Content-Disposition": f'attachment; filename="{TEMPLATE_FILENAME}"'}
     return Response(
         content=template_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers=headers_resp
+        headers=headers_resp,
     )
+
 
 @router.post("/preview", response_class=HTMLResponse)
 async def preview_import(
     request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(require_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     if not file.filename.endswith(".xlsx"):
         return templates.TemplateResponse(
             "admin/import.html",
-            context_with_defaults(request, current_user, {"preview_rows": None, "error": "Пожалуйста, загрузите файл формата .xlsx"}),
-            status_code=status.HTTP_400_BAD_REQUEST
+            context_with_defaults(
+                request, current_user, {"preview_rows": None, "error": "Пожалуйста, загрузите файл формата .xlsx"}
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     content = await file.read()
@@ -170,31 +167,31 @@ async def preview_import(
     IMPORT_STAGING_CACHE[file_token] = {
         "raw_filename": file.filename,
         "rows": valid_rows_for_import,
-        "has_errors": has_errors
+        "has_errors": has_errors,
     }
 
     return templates.TemplateResponse(
         "admin/import.html",
-        context_with_defaults(request, current_user, {
-            "preview_rows": preview_rows,
-            "file_token": file_token,
-            "has_errors": has_errors,
-            "error": None
-        })
+        context_with_defaults(
+            request,
+            current_user,
+            {"preview_rows": preview_rows, "file_token": file_token, "has_errors": has_errors, "error": None},
+        ),
     )
+
 
 @router.post("/confirm")
 def confirm_import(
-    file_token: str = Form(...),
-    current_user: User = Depends(require_admin),
-    db: Session = Depends(get_db)
+    file_token: str = Form(...), current_user: User = Depends(require_admin), db: Session = Depends(get_db)
 ):
     staging_data = IMPORT_STAGING_CACHE.pop(file_token, None)
     if not staging_data:
         return RedirectResponse(url="/admin/import?error=Сессия+импорта+истекла", status_code=status.HTTP_302_FOUND)
 
     if staging_data.get("has_errors"):
-        return RedirectResponse(url="/admin/import?error=Файл+содержит+критические+ошибки+и+отклонен", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(
+            url="/admin/import?error=Файл+содержит+критические+ошибки+и+отклонен", status_code=status.HTTP_302_FOUND
+        )
 
     staged_rows = staging_data["rows"]
     raw_filename = staging_data["raw_filename"]
@@ -226,14 +223,16 @@ def confirm_import(
                         owner_user_id=r["owner_user_id"],
                         is_round_the_clock=r["is_round_the_clock"],
                         notes=r["notes"] or None,
-                        status="active"
+                        status="active",
                     )
                     db.add(comp)
                     imported_count += 1
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
-        return RedirectResponse(url=f"/admin/import?error=Ошибка+транзакции+импорта:+{exc}", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(
+            url=f"/admin/import?error=Ошибка+транзакции+импорта:+{exc}", status_code=status.HTTP_302_FOUND
+        )
 
     log_audit(
         db=db,
@@ -244,11 +243,11 @@ def confirm_import(
             "raw_filename": raw_filename,
             "imported_count": imported_count,
             "updated_count": updated_count,
-            "total_processed": len(staged_rows)
-        }
+            "total_processed": len(staged_rows),
+        },
     )
 
     return RedirectResponse(
         url=f"/admin/computers?message=Импорт+завершен:+создано+{imported_count},+обновлено+{updated_count}",
-        status_code=status.HTTP_302_FOUND
+        status_code=status.HTTP_302_FOUND,
     )

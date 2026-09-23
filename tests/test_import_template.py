@@ -1,10 +1,14 @@
 """Tests for Excel fleet import template and parser consistency."""
 
+import importlib
 import io
 import os
-from fastapi.testclient import TestClient
+import pkgutil
+from pathlib import Path
+
 import openpyxl
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -18,10 +22,9 @@ from app.routers.import_fleet import parse_excel_rows
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_import_template.db"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 @pytest.fixture(scope="module")
 def setup_db():
@@ -30,6 +33,7 @@ def setup_db():
     Base.metadata.drop_all(bind=engine)
     if os.path.exists("./test_import_template.db"):
         os.remove("./test_import_template.db")
+
 
 @pytest.fixture
 def db_session(setup_db):
@@ -40,6 +44,20 @@ def db_session(setup_db):
     session.close()
     transaction.rollback()
     connection.close()
+
+
+def test_package_uniqueness_and_all_app_modules_importable():
+    """Safety guard: verify app.importer is sole package and all app modules import cleanly."""
+    app_dir = Path("app")
+    assert (app_dir / "importer").is_dir(), "app/importer directory must exist"
+    assert not (app_dir / "import").exists(), "app/import directory must not exist"
+
+    # Dynamically import all modules under app package
+    import app as app_pkg
+
+    for _, modname, _ in pkgutil.walk_packages(app_pkg.__path__, prefix="app."):
+        mod = importlib.import_module(modname)
+        assert mod is not None
 
 
 def test_schema_constant_structure():
@@ -171,7 +189,9 @@ def test_preview_and_confirm_generated_template(db_session):
     template_bytes = build_template()
 
     # Post template to /admin/import/preview
-    files = {"file": (TEMPLATE_FILENAME, template_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    files = {
+        "file": (TEMPLATE_FILENAME, template_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    }
     res_preview = client.post("/admin/import/preview", files=files)
     assert res_preview.status_code == 200
     assert "PC-OFFICE-101" in res_preview.text
@@ -180,6 +200,7 @@ def test_preview_and_confirm_generated_template(db_session):
 
     # Extract file_token from HTML hidden input
     import re
+
     match = re.search(r'name="file_token"\s+value="([^"]+)"', res_preview.text)
     assert match is not None
     file_token = match.group(1)

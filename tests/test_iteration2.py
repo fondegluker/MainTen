@@ -14,10 +14,9 @@ from app.models.models import AuditLog, Computer, User, UserRole
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_iteration2.db"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 @pytest.fixture(scope="module")
 def setup_db():
@@ -26,6 +25,7 @@ def setup_db():
     Base.metadata.drop_all(bind=engine)
     if os.path.exists("./test_iteration2.db"):
         os.remove("./test_iteration2.db")
+
 
 @pytest.fixture
 def db_session(setup_db):
@@ -36,6 +36,7 @@ def db_session(setup_db):
     session.close()
     transaction.rollback()
     connection.close()
+
 
 @pytest.fixture
 def admin_client(db_session):
@@ -63,6 +64,7 @@ def admin_client(db_session):
     yield c
     app.dependency_overrides.clear()
 
+
 def test_user_crud_and_audit(admin_client, db_session):
     # Create User
     resp = admin_client.post(
@@ -82,7 +84,11 @@ def test_user_crud_and_audit(admin_client, db_session):
     assert created_user.role == UserRole.TECHNICIAN
 
     # Verify audit log created
-    audit = db_session.query(AuditLog).filter(AuditLog.action == "create_user", AuditLog.entity_id == created_user.id).first()
+    audit = (
+        db_session.query(AuditLog)
+        .filter(AuditLog.action == "create_user", AuditLog.entity_id == created_user.id)
+        .first()
+    )
     assert audit is not None
     assert audit.after_json["username"] == "tech_john"
 
@@ -100,6 +106,7 @@ def test_user_crud_and_audit(admin_client, db_session):
     assert resp_update.status_code == 200
     db_session.refresh(created_user)
     assert created_user.username == "tech_john_updated"
+
 
 def test_computer_crud_and_audit(admin_client, db_session):
     # Create Computer
@@ -122,7 +129,9 @@ def test_computer_crud_and_audit(admin_client, db_session):
     assert comp.is_round_the_clock is True
 
     # Audit log check
-    audit = db_session.query(AuditLog).filter(AuditLog.action == "create_computer", AuditLog.entity_id == comp.id).first()
+    audit = (
+        db_session.query(AuditLog).filter(AuditLog.action == "create_computer", AuditLog.entity_id == comp.id).first()
+    )
     assert audit is not None
 
     # Delete Computer
@@ -130,6 +139,7 @@ def test_computer_crud_and_audit(admin_client, db_session):
     assert del_resp.status_code == 200
     deleted_comp = db_session.query(Computer).filter(Computer.id == comp.id).first()
     assert deleted_comp is None
+
 
 def test_excel_import_preview_and_confirm(admin_client, db_session):
     # Create a mock openpyxl workbook in memory
@@ -146,7 +156,13 @@ def test_excel_import_preview_and_confirm(admin_client, db_session):
     # Upload for preview
     response = admin_client.post(
         "/admin/import/preview",
-        files={"file": ("test_fleet.xlsx", file_stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "test_fleet.xlsx",
+                file_stream.getvalue(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     assert response.status_code == 200
     assert "MOCK-PC-01" in response.text
@@ -154,6 +170,7 @@ def test_excel_import_preview_and_confirm(admin_client, db_session):
 
     # Extract file_token from HTML form response
     import re
+
     match = re.search(r'name="file_token"\s+value="([^"]+)"', response.text)
     assert match is not None
     file_token = match.group(1)

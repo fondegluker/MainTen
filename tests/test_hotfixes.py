@@ -12,10 +12,9 @@ from app.models.models import User, UserRole
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_hotfixes.db"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 @pytest.fixture(scope="module")
 def setup_db():
@@ -24,6 +23,7 @@ def setup_db():
     Base.metadata.drop_all(bind=engine)
     if os.path.exists("./test_hotfixes.db"):
         os.remove("./test_hotfixes.db")
+
 
 @pytest.fixture
 def db_session(setup_db):
@@ -34,6 +34,7 @@ def db_session(setup_db):
     session.close()
     transaction.rollback()
     connection.close()
+
 
 @pytest.fixture
 def admin_client(db_session):
@@ -60,10 +61,12 @@ def admin_client(db_session):
     yield c
     app.dependency_overrides.clear()
 
+
 def test_audit_log_viewer_endpoint(admin_client):
     res = admin_client.get("/admin/audit")
     assert res.status_code == 200
     assert "Журнал аудита" in res.text
+
 
 def test_unauthenticated_html_redirect(db_session):
     def _override_get_db():
@@ -78,6 +81,7 @@ def test_unauthenticated_html_redirect(db_session):
     assert res.status_code == 302
     assert res.headers["location"] == "/auth/login"
     app.dependency_overrides.clear()
+
 
 def test_admin_dashboard_auth_by_username_and_email(db_session):
     provider = LocalAuthProvider()
@@ -101,7 +105,9 @@ def test_admin_dashboard_auth_by_username_and_email(db_session):
 
     # Test client 1: Login by username
     client1 = TestClient(app)
-    res1 = client1.post("/auth/login", data={"username": "admin_dash_test", "password": "admin123"}, follow_redirects=False)
+    res1 = client1.post(
+        "/auth/login", data={"username": "admin_dash_test", "password": "admin123"}, follow_redirects=False
+    )
     assert res1.status_code == 302
     session_cookie1 = res1.cookies.get("session")
 
@@ -112,7 +118,9 @@ def test_admin_dashboard_auth_by_username_and_email(db_session):
 
     # Test client 2: Login by email
     client2 = TestClient(app)
-    res2 = client2.post("/auth/login", data={"username": "admin_dash_test@cfms.local", "password": "admin123"}, follow_redirects=False)
+    res2 = client2.post(
+        "/auth/login", data={"username": "admin_dash_test@cfms.local", "password": "admin123"}, follow_redirects=False
+    )
     assert res2.status_code == 302
     session_cookie2 = res2.cookies.get("session")
 

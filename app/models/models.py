@@ -43,7 +43,9 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
-    computers: Mapped[list["Computer"]] = relationship("Computer", back_populates="owner_user", foreign_keys="[Computer.owner_user_id]")
+    computers: Mapped[list["Computer"]] = relationship(
+        "Computer", back_populates="owner_user", foreign_keys="[Computer.owner_user_id]"
+    )
     assigned_events: Mapped[list["MaintenanceEvent"]] = relationship("MaintenanceEvent", back_populates="technician")
 
 
@@ -77,7 +79,9 @@ class MaintenanceProtocolItem(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
 
 class MaintenanceEvent(Base):
@@ -89,18 +93,26 @@ class MaintenanceEvent(Base):
     scheduled_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     scheduled_slot: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[MaintenanceEventStatus] = mapped_column(
-        Enum(MaintenanceEventStatus, values_callable=lambda obj: [e.value for e in obj]), default=MaintenanceEventStatus.PLANNED, nullable=False
+        Enum(MaintenanceEventStatus, values_callable=lambda obj: [e.value for e in obj]),
+        default=MaintenanceEventStatus.PLANNED,
+        nullable=False,
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
     computer: Mapped["Computer"] = relationship("Computer", back_populates="maintenance_events")
     technician: Mapped["User | None"] = relationship("User", back_populates="assigned_events")
-    checks: Mapped[list["MaintenanceEventCheck"]] = relationship("MaintenanceEventCheck", back_populates="event", cascade="all, delete-orphan")
-    attachments: Mapped[list["MaintenanceEventAttachment"]] = relationship("MaintenanceEventAttachment", back_populates="event", cascade="all, delete-orphan")
+    checks: Mapped[list["MaintenanceEventCheck"]] = relationship(
+        "MaintenanceEventCheck", back_populates="event", cascade="all, delete-orphan"
+    )
+    attachments: Mapped[list["MaintenanceEventAttachment"]] = relationship(
+        "MaintenanceEventAttachment", back_populates="event", cascade="all, delete-orphan"
+    )
 
 
 class MaintenanceEventCheck(Base):

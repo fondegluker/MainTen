@@ -12,7 +12,7 @@ def log_audit(
     entity: str,
     entity_id: int | None = None,
     before: dict[str, Any] | None = None,
-    after: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None,
 ) -> AuditLog:
     entry = AuditLog(
         actor_user_id=actor_user_id,
@@ -20,7 +20,7 @@ def log_audit(
         entity=entity,
         entity_id=entity_id,
         before_json=before,
-        after_json=after
+        after_json=after,
     )
     db.add(entry)
     db.commit()

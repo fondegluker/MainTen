@@ -13,10 +13,9 @@ from app.models.models import Computer, User, UserRole
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_app.db"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 @pytest.fixture(scope="module")
 def setup_db():
@@ -25,6 +24,7 @@ def setup_db():
     Base.metadata.drop_all(bind=engine)
     if os.path.exists("./test_app.db"):
         os.remove("./test_app.db")
+
 
 @pytest.fixture
 def db_session(setup_db):
@@ -35,6 +35,7 @@ def db_session(setup_db):
     session.close()
     transaction.rollback()
     connection.close()
+
 
 @pytest.fixture
 def client(db_session):
@@ -48,6 +49,7 @@ def client(db_session):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
 
 def test_local_auth_provider(db_session):
     provider = LocalAuthProvider()
@@ -75,11 +77,14 @@ def test_local_auth_provider(db_session):
     auth_user_bad = provider.authenticate(db_session, AuthCredentials("admin_test", "wrongpass"))
     assert auth_user_bad is None
 
+
 def test_ad_auth_provider_stub(db_session):
     provider = AdAuthProvider()
     from app.auth.base import AuthCredentials
+
     with pytest.raises(NotImplementedError):
         provider.authenticate(db_session, AuthCredentials("ad_user", "pass"))
+
 
 def test_web_auth_login_flow(client, db_session):
     provider = LocalAuthProvider()
@@ -107,6 +112,7 @@ def test_web_auth_login_flow(client, db_session):
     assert dash_response.status_code == 200
     assert "Панель администратора" in dash_response.text
 
+
 def test_magic_link_flow(client, db_session):
     user = User(
         username="user1",
@@ -117,11 +123,7 @@ def test_magic_link_flow(client, db_session):
     db_session.add(user)
     db_session.commit()
 
-    computer = Computer(
-        hostname="PC-USER-01",
-        owner_user_id=user.id,
-        status="active"
-    )
+    computer = Computer(hostname="PC-USER-01", owner_user_id=user.id, status="active")
     db_session.add(computer)
     db_session.commit()
 
@@ -129,6 +131,7 @@ def test_magic_link_flow(client, db_session):
     response = client.get(f"/auth/magic-link?token={token}", follow_redirects=True)
     assert response.status_code == 200
     assert "PC-USER-01" in response.text
+
 
 def test_locale_switcher(client):
     response = client.get("/set-locale?locale=en", follow_redirects=False)

@@ -69,15 +69,17 @@ def build_template() -> bytes:
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
     for col in FLEET_IMPORT_COLUMNS:
-        ws_readme.append([
-            col.header_en,
-            col.field_name,
-            col.type_name,
-            "Да / Yes" if col.required else "Нет / No",
-            col.example_value,
-            col.description_ru,
-            col.description_en,
-        ])
+        ws_readme.append(
+            [
+                col.header_en,
+                col.field_name,
+                col.type_name,
+                "Да / Yes" if col.required else "Нет / No",
+                col.example_value,
+                col.description_ru,
+                col.description_en,
+            ]
+        )
 
     ws_readme.freeze_panes = "A2"
 

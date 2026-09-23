@@ -1,4 +1,3 @@
-
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -17,6 +16,7 @@ def get_current_user_optional(request: Request, db: Session = Depends(get_db)) -
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     return user
 
+
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     user = get_current_user_optional(request, db)
     if not user:
@@ -25,6 +25,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
             detail="Not authenticated",
         )
     return user
+
 
 class RoleChecker:
     def __init__(self, allowed_roles: list[UserRole]):
@@ -37,6 +38,7 @@ class RoleChecker:
                 detail="Operation not permitted",
             )
         return user
+
 
 require_admin = RoleChecker([UserRole.ADMIN])
 require_technician = RoleChecker([UserRole.ADMIN, UserRole.TECHNICIAN])

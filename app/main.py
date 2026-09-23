@@ -13,6 +13,7 @@ app = FastAPI(
     redoc_url="/api/v1/redoc",
 )
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     # For HTML requests that are unauthenticated, redirect to login page
@@ -22,7 +23,9 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     # Default behavior for non-HTML/API calls
     from fastapi.exception_handlers import http_exception_handler as default_handler
+
     return await default_handler(request, exc)
+
 
 # Mount web UI, admin, and import routers
 app.include_router(web_router)

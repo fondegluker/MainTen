@@ -120,8 +120,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "preview_import": "Preview Import",
         "confirm_import": "Confirm Import",
         "import_success": "Import completed successfully",
-    }
+    },
 }
+
 
 def get_locale(request: Request | None = None, user_locale: str | None = None) -> str:
     if user_locale in ("ru", "en"):
@@ -134,6 +135,7 @@ def get_locale(request: Request | None = None, user_locale: str | None = None) -
         if "en" in accept_lang.lower() and "ru" not in accept_lang.lower():
             return "en"
     return "ru"
+
 
 def translate(key: str, locale: str = "ru") -> str:
     lang_dict = TRANSLATIONS.get(locale, TRANSLATIONS["ru"])
