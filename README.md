@@ -2,6 +2,8 @@
 
 CFMS is a corporate web application designed for scheduling, executing, and tracking preventive maintenance (ТО) across a corporate computer fleet (~300 devices).
 
+For branch management and contribution rules, see [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/decisions.md`](docs/decisions.md).
+
 ## System Architecture
 
 CFMS is built with a server-rendered web stack and modular architecture:
