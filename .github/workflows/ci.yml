@@ -55,6 +55,11 @@ jobs:
         run: |
           pytest
 
+      - name: Free Port 5432 for Docker Compose
+        run: |
+          sudo systemctl stop postgresql 2>/dev/null || true
+          docker ps -q --filter "ancestor=postgres:16-alpine" | xargs -r docker stop || true
+
       - name: Build and Run Docker Compose Services
         run: |
           docker compose up -d --build
