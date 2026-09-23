@@ -1,5 +1,14 @@
 # Architectural Decisions & Design Rationale
 
+## Fleet Import Template & Single Source of Truth
+
+- Created `app/importer/schema.py` containing `FLEET_IMPORT_COLUMNS` schema constant as the single source of truth for column titles, database field mappings, data types, required flags, default values, example values, and localized descriptions.
+- Created `app/importer/template.py` exposing `build_template() -> bytes` and `TEMPLATE_FILENAME = "fleet_import_template.xlsx"`.
+- Generated and committed canonical asset at `app/importer/assets/fleet_import_template.xlsx`.
+- Both the Excel importer parser (`app/routers/import_fleet.py`) and the template generator (`app/importer/template.py`) import `FLEET_IMPORT_COLUMNS` to ensure the template and parser can never diverge.
+- Served route `GET /admin/import/template` dynamically regenerates template bytes on-the-fly and returns HTTP 200 with `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` and `Content-Disposition: attachment; filename="fleet_import_template.xlsx"`.
+- Documented full specification in `docs/fleet-import-format.md` and updated `README.md`.
+
 ## Dashboard 500 Hotfix & Postgres Enum Alignment
 
 - Resolved HTTP 500 `DataError` on `/admin/dashboard` in PostgreSQL environments caused by uppercase enum type definition (`PLANNED`, `IN_PROGRESS`, `DONE`, `MISSED`, `CANCELLED`) in initial migration versus lowercase string values (`planned`, `in_progress`, `done`, `missed`, `cancelled`) in Python ORM model.

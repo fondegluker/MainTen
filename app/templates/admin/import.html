@@ -6,9 +6,9 @@
 <div class="max-w-4xl mx-auto space-y-6">
     <div class="flex items-center justify-between">
         <h1 class="text-3xl font-bold text-gray-900">{{ translate('import_fleet', locale) }}</h1>
-        <a href="/admin/import/template" class="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium px-4 py-2 rounded-lg border border-gray-300 transition flex items-center gap-2">
+        <a href="/admin/import/template" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-            Скачать шаблон Excel (.xlsx)
+            Скачать шаблон (Download template)
         </a>
     </div>
 
@@ -20,9 +20,23 @@
 
     <!-- Upload Form -->
     <div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
-        <p class="text-sm text-gray-600">
-            Загрузите файл Excel (.xlsx) с колонками: <strong>hostname</strong>, <strong>ip</strong>, <strong>mac</strong>, <strong>os</strong>, <strong>location</strong>, <strong>owner</strong>, <strong>is_round_the_clock</strong>, <strong>notes</strong>.
-        </p>
+        <div class="p-4 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-900 space-y-2">
+            <div class="font-semibold flex items-center gap-2">
+                <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Формат импорта техники / Fleet Import Specifications:
+            </div>
+            <p>
+                Обязательная колонка: <code class="font-mono bg-white px-1 py-0.5 rounded text-indigo-800 font-semibold">hostname</code> (имя компьютера).
+            </p>
+            <p>
+                Дополнительные колонки: <code class="font-mono bg-white px-1 py-0.5 rounded text-indigo-700">ip</code>, <code class="font-mono bg-white px-1 py-0.5 rounded text-indigo-700">mac</code>, <code class="font-mono bg-white px-1 py-0.5 rounded text-indigo-700">os</code>, <code class="font-mono bg-white px-1 py-0.5 rounded text-indigo-700">location</code>, <code class="font-mono bg-white px-1 py-0.5 rounded text-indigo-700">owner</code>, <code class="font-mono bg-white px-1 py-0.5 rounded text-indigo-700">is_round_the_clock</code> (24/7), <code class="font-mono bg-white px-1 py-0.5 rounded text-indigo-700">notes</code>.
+            </p>
+            <div class="pt-1">
+                <a href="/docs/fleet-import-format.md" target="_blank" class="text-indigo-600 underline hover:text-indigo-800 font-medium text-xs">
+                    Подробная документация по формату импорта (docs/fleet-import-format.md) &rarr;
+                </a>
+            </div>
+        </div>
 
         <form action="/admin/import/preview" method="POST" enctype="multipart/form-data" class="flex items-center gap-4">
             <input type="file" name="file" accept=".xlsx" required

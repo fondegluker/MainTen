@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import require_admin
 from app.core.database import get_db
 from app.core.validators import validate_ip, validate_mac
+from app.importer.schema import FLEET_IMPORT_COLUMNS, parse_boolean_value, resolve_column_value
+from app.importer.template import TEMPLATE_FILENAME, build_template
 from app.models.models import Computer, User
 from app.routers.web import context_with_defaults
 from app.services.audit_service import log_audit
@@ -24,7 +26,7 @@ IMPORT_STAGING_CACHE: dict[str, dict[str, Any]] = {}
 
 def parse_excel_rows(file_bytes: bytes) -> list[dict[str, Any]]:
     workbook = openpyxl.load_workbook(filename=io.BytesIO(file_bytes), data_only=True)
-    sheet = workbook.active
+    sheet = workbook["Computers"] if "Computers" in workbook.sheetnames else workbook.active
     rows = list(sheet.iter_rows(values_only=True))
     if not rows:
         return []
@@ -37,7 +39,8 @@ def parse_excel_rows(file_bytes: bytes) -> list[dict[str, Any]]:
             continue
         row_dict = {}
         for col_name, val in zip(header, row, strict=False):
-            row_dict[col_name] = str(val).strip() if val is not None else ""
+            if col_name:
+                row_dict[col_name] = str(val).strip() if val is not None else ""
         row_dict["_row_idx"] = idx
         parsed.append(row_dict)
     return parsed
@@ -57,26 +60,12 @@ def import_page(
 def download_import_template(
     current_user: User = Depends(require_admin)
 ):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Fleet Import Template"
-
-    headers = ["hostname", "ip", "mac", "os", "location", "owner", "is_round_the_clock", "notes"]
-    ws.append(headers)
-
-    # Example row
-    example_row = ["PC-OFFICE-101", "192.168.1.50", "00:11:22:33:44:55", "Windows 11", "Room 302", "admin", "нет", "Рабочий ПК"]
-    ws.append(example_row)
-
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-
+    template_bytes = build_template()
     headers_resp = {
-        'Content-Disposition': 'attachment; filename="fleet_import_template.xlsx"'
+        'Content-Disposition': f'attachment; filename="{TEMPLATE_FILENAME}"'
     }
     return Response(
-        content=output.getvalue(),
+        content=template_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers_resp
     )
@@ -102,22 +91,24 @@ async def preview_import(
     existing_users = {u.username.lower(): u for u in db.query(User).all()}
     existing_users.update({u.email_or_login.lower(): u for u in db.query(User).all()})
 
+    col_specs = {col.key: col for col in FLEET_IMPORT_COLUMNS}
+
     preview_rows = []
     valid_rows_for_import = []
     seen_hostnames_in_file = set()
     has_errors = False
 
     for r in raw_rows:
-        hostname = r.get("hostname") or r.get("компьютер") or r.get("имя хоста") or ""
-        ip = r.get("ip") or r.get("ip-адрес") or ""
-        mac = r.get("mac") or r.get("mac-адрес") or ""
-        os_name = r.get("os") or r.get("операционная система") or ""
-        location = r.get("location") or r.get("кабинет") or r.get("расположение") or ""
-        owner_text = r.get("owner") or r.get("владелец") or r.get("пользователь") or ""
-        notes = r.get("notes") or r.get("заметки") or ""
-        rtc_val = str(r.get("is_round_the_clock") or r.get("24/7") or "").lower()
+        hostname = resolve_column_value(r, col_specs["hostname"])
+        ip = resolve_column_value(r, col_specs["ip"])
+        mac = resolve_column_value(r, col_specs["mac"])
+        os_name = resolve_column_value(r, col_specs["os"])
+        location = resolve_column_value(r, col_specs["location"])
+        owner_text = resolve_column_value(r, col_specs["owner"])
+        notes = resolve_column_value(r, col_specs["notes"])
+        rtc_val = resolve_column_value(r, col_specs["is_round_the_clock"])
 
-        is_rtc = rtc_val in ("1", "true", "да", "yes")
+        is_rtc = parse_boolean_value(rtc_val)
 
         errors = []
         warning = None

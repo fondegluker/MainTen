@@ -41,6 +41,16 @@ The project includes shell scripts for Docker setup and environment management:
 
 ---
 
+## Fleet Import
+
+CFMS supports importing computer inventory from Excel (`.xlsx`) spreadsheets:
+
+- **Download Template Route:** `GET /admin/import/template` (ADMIN role required)
+- **Canonical Asset Path:** `app/importer/assets/fleet_import_template.xlsx`
+- **Detailed Specification:** See [`docs/fleet-import-format.md`](docs/fleet-import-format.md) for full column contracts, data validation rules, duplicate handling, and boolean/date formats.
+
+---
+
 ## Iteration 2 Features & Scope
 
 - **Admin User Management**:
