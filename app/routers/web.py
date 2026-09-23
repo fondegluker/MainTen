@@ -4,7 +4,6 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
-    get_current_user,
     get_current_user_optional,
     require_admin,
 )
@@ -105,7 +104,7 @@ def magic_link_login(token: str, request: Request, db: Session = Depends(get_db)
 
     session_token = generate_session_cookie(user.id)
     computer_id = data.get("computer_id")
-    redirect_url = f"/user/my-computers?computer_id={computer_id}" if computer_id else "/user/my-computers"
+    redirect_url = f"/user/schedule/{computer_id}" if computer_id else "/user/my-computers"
 
     resp = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     resp.set_cookie(key="session", value=session_token, httponly=True, secure=False)
@@ -137,12 +136,4 @@ def admin_dashboard(request: Request, current_user: User = Depends(require_admin
 
     return templates.TemplateResponse(
         "admin_dashboard.html", context_with_defaults(request, current_user, {"stats": stats})
-    )
-
-
-@router.get("/user/my-computers", response_class=HTMLResponse)
-def user_computers(request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    computers = db.query(Computer).filter(Computer.owner_user_id == current_user.id).all()
-    return templates.TemplateResponse(
-        "user_computers.html", context_with_defaults(request, current_user, {"computers": computers})
     )

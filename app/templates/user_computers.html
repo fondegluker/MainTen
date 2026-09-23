@@ -3,27 +3,110 @@
 {% block title %}{{ translate('my_computers', locale) }} - CFMS{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <h1 class="text-3xl font-bold text-gray-900">{{ translate('my_computers', locale) }}</h1>
-
-    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        {% if computers %}
-            <div class="space-y-4">
-                {% for computer in computers %}
-                <div class="p-4 border rounded-lg flex justify-between items-center bg-gray-50">
-                    <div>
-                        <div class="font-bold text-lg text-gray-800">{{ computer.hostname }}</div>
-                        <div class="text-sm text-gray-600">IP: {{ computer.ip or '-' }} | OS: {{ computer.os or '-' }} | {{ computer.location or '-' }}</div>
-                    </div>
-                    <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
-                        {{ computer.status }}
-                    </span>
-                </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <p class="text-gray-500">Компьютеры не найдены.</p>
+<div class="max-w-5xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-3xl font-bold text-gray-900">{{ translate('my_computers', locale) }}</h1>
+        {% if is_manager_user %}
+            <span class="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full border border-purple-200">
+                Руководитель / Менеджер (несколько ПК)
+            </span>
         {% endif %}
     </div>
+
+    {% if message %}
+    <div class="p-4 bg-green-100 border border-green-300 text-green-800 rounded-lg text-sm">
+        {{ message }}
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg text-sm">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if computers_data %}
+        <div class="space-y-6">
+            {% for item in computers_data %}
+            {% set comp = item.computer %}
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden space-y-4 p-6">
+                <!-- Header & Metadata -->
+                <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b">
+                    <div>
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-2xl font-bold text-gray-900">{{ comp.hostname }}</h2>
+                            {% if comp.is_round_the_clock %}
+                                <span class="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-xs font-bold rounded-md">24/7 (RTC)</span>
+                            {% endif %}
+                            <span class="px-2.5 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-md">{{ comp.status }}</span>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-1">
+                            <strong>IP:</strong> {{ comp.ip or '-' }} &bull; <strong>OS:</strong> {{ comp.os or '-' }} &bull; <strong>Кабинет:</strong> {{ comp.location or '-' }}
+                        </p>
+                    </div>
+
+                    <!-- Scheduling Banner / Button -->
+                    <div class="flex items-center gap-3">
+                        {% if item.planned_event %}
+                            <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-900">
+                                <span class="font-semibold text-indigo-700">Запланировано ТО:</span>
+                                <strong>{{ item.planned_event.scheduled_date.strftime('%d.%m.%Y') }}</strong>
+                                <a href="/user/schedule/{{ comp.id }}" class="ml-2 text-indigo-600 hover:text-indigo-800 text-xs font-semibold underline">Изменить дату</a>
+                            </div>
+                        {% elif item.window_open %}
+                            <div class="p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center gap-4">
+                                <div class="text-xs text-amber-900 font-medium">
+                                    Открыто окно выбора даты! Срок: <strong>{{ item.due_date.strftime('%d.%m.%Y') }}</strong>
+                                </div>
+                                <a href="/user/schedule/{{ comp.id }}" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm rounded-md shadow-sm transition whitespace-nowrap">
+                                    Выберите дату ТО
+                                </a>
+                            </div>
+                        {% else %}
+                            <div class="text-xs text-gray-500 text-right">
+                                Следующее ТО по плану:<br>
+                                <strong class="text-gray-700 text-sm">{{ item.due_date.strftime('%d.%m.%Y') }}</strong>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- History Section -->
+                <div>
+                    <h3 class="text-base font-semibold text-gray-800 mb-3">История технического обслуживания (ТО)</h3>
+                    {% if item.past_events %}
+                        <div class="space-y-3">
+                            {% for ev in item.past_events %}
+                            <div class="p-3 border rounded-lg bg-gray-50 text-sm flex justify-between items-start">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <strong class="text-gray-900">{{ ev.scheduled_date.strftime('%d.%m.%Y') }}</strong>
+                                        {% if ev.status == 'done' %}
+                                            <span class="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded font-medium">Выполнено</span>
+                                        {% elif ev.status == 'missed' %}
+                                            <span class="px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded font-medium">Пропущено</span>
+                                        {% else %}
+                                            <span class="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded font-medium">{{ ev.status }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if ev.comment %}
+                                        <p class="text-xs text-gray-600 mt-1">Комментарий: {{ ev.comment }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-xs text-gray-500 italic">История ранее проведенных ТО отсутствует.</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="bg-white p-6 border rounded-xl text-center text-gray-500">
+            За вами не закреплено ни одного компьютера.
+        </div>
+    {% endif %}
 </div>
 {% endblock %}

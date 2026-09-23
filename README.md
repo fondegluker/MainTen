@@ -63,6 +63,20 @@ All pull requests and branch merges must pass the following required CI checks i
 
 ---
 
+## Iteration 4 Features & Scope
+
+- **Scheduling Engine (`app/services/scheduling_service.py`)**:
+  - Automatic calculation of `next_maintenance_due_at` (every 6 months for RTC / 24/7 computers, every 12 months for non-RTC computers; configurable via `settings`).
+  - Active notification window calculation (`selection_window_days`, default 20 days prior to due date).
+  - Technician capacity-aware working days filter (`get_available_dates`) integrating the Belarus production working calendar.
+  - Window expiry shift logic (`process_unselected_windows` shifts due window 30 days forward if user does not choose a date).
+- **User Maintenance Selection & Fleet History Pages**:
+  - `/user/my-computers`: List of all assigned computers with metadata (hostname, IP, OS, location), 24/7 status, notification window prompt, planned event status, and full past event history with checklists. Aggregates multiple computers for "Manager" user case.
+  - `/user/schedule/{computer_id}`: Date picker form offering selectable future working days where technician capacity exists.
+  - Form submission creates/reschedules a `planned` `maintenance_event` assigned to an available technician and logs `create_maintenance_event` or `reschedule_maintenance_event` in `audit_log`.
+
+---
+
 ## Iteration 2 Features & Scope
 
 - **Admin User Management**:
