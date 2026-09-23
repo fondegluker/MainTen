@@ -1,5 +1,10 @@
 # Architectural Decisions & Design Rationale
 
+## Package Naming & CI Quality Rules
+
+- **Python package naming rule:** Never use Python reserved keywords (such as `import`, `class`, `def`, `pass`) as package or module names under `app/`. The fleet import package is canonically named `app.importer`.
+- **CI rule:** Pull requests and commits must pass all required checks before merging: `Run Import Smoke Check` (`pytest tests/test_import_smoke.py -x -q`), `Run Ruff Linter & Format Check` (`ruff check .`, `ruff format --check .`), `Run Pytest Test Suite` (`pytest`), and container E2E smoke tests.
+
 ## Fleet Import Template & Single Source of Truth
 
 - Chosen `app.importer` as the canonical Python package name (resolving reserved keyword conflict with `import`).

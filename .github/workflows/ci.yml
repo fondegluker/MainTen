@@ -43,6 +43,10 @@ jobs:
           ruff check .
           ruff format --check .
 
+      - name: Run Import Smoke Check
+        run: |
+          pytest tests/test_import_smoke.py -x -q
+
       - name: Run Alembic Migrations
         env:
           DATABASE_URL: postgresql://cfms_user:cfms_password@localhost:5432/cfms_db

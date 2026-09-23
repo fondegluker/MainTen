@@ -51,6 +51,16 @@ CFMS supports importing computer inventory from Excel (`.xlsx`) spreadsheets:
 
 ---
 
+## Required CI Checks & Code Quality Rules
+
+All pull requests and branch merges must pass the following required CI checks in GitHub Actions:
+- **`Run Import Smoke Check` (`import-smoke`)**: Executes `pytest tests/test_import_smoke.py -x -q` to ensure all modules under `app/` are importable without syntax errors and no Python reserved keywords are used as package/module names (see [`docs/decisions.md`](docs/decisions.md)).
+- **`Run Ruff Linter & Format Check` (`lint`)**: Executes `ruff check .` and `ruff format --check .`.
+- **`Run Pytest Test Suite` (`tests`)**: Executes `pytest` across all unit/integration tests with `--import-mode=importlib`.
+- **`Container Smoke Tests`**: Verifies E2E container startup and route health checks in Docker Compose.
+
+---
+
 ## Iteration 2 Features & Scope
 
 - **Admin User Management**:
