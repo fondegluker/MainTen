@@ -1,9 +1,15 @@
 # Architectural Decisions & Design Rationale
 
+## Branch Renaming & Repository Strategy Baseline
+
+- **Branch Rename:** Renamed working development branch from `jules-3805668974257506057-99790dda` to `iteration-3` at commit SHA `a86505b38ed3a61f5bc12ef6200236a9cf6d2ff8`.
+- **Reason:** Retired auto-generated branch names and adopted strict `iteration-N` branch policy.
+- **Base Branch Alignment (Strategy A):** Caught `main` branch up to Iteration 3 baseline via pull request merge commit so `main` contains the complete Iterations 1–3 codebase and future `iteration-N` feature branches branch cleanly from `main`.
+
 ## Package Naming & CI Quality Rules
 
 - **Python package naming rule:** Never use Python reserved keywords (such as `import`, `class`, `def`, `pass`) as package or module names under `app/`. The fleet import package is canonically named `app.importer`.
-- **CI rule:** Pull requests and commits must pass all required checks before merging: `Run Import Smoke Check` (`pytest tests/test_import_smoke.py -x -q`), `Run Ruff Linter & Format Check` (`ruff check .`, `ruff format --check .`), `Run Pytest Test Suite` (`pytest`), and container E2E smoke tests.
+- **CI rule:** Pull requests and commits must pass all required checks before merging: `Run Import Smoke Check` (`pytest tests/test_import_smoke.py -x -q`), `Run Branch Name Check` (`branch-name-check`), `Run Ruff Linter & Format Check` (`ruff check .`, `ruff format --check .`), `Run Pytest Test Suite` (`pytest`), and container E2E smoke tests.
 
 ## Fleet Import Template & Single Source of Truth
 
