@@ -3,7 +3,7 @@
 {% block title %}{{ translate('my_computers', locale) }} - CFMS{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto space-y-6">
+<div class="max-w-4xl mx-auto space-y-6">
     <div class="flex items-center justify-between">
         <h1 class="text-3xl font-bold text-gray-900">{{ translate('my_computers', locale) }}</h1>
         {% if is_manager_user %}
@@ -14,23 +14,23 @@
     </div>
 
     {% if message %}
-    <div class="p-4 bg-green-100 border border-green-300 text-green-800 rounded-lg text-sm">
+    <div class="p-4 bg-green-100 border border-green-300 text-green-800 rounded-lg text-sm font-medium">
         {{ message }}
     </div>
     {% endif %}
 
     {% if error %}
-    <div class="p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg text-sm">
+    <div class="p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg text-sm font-medium">
         {{ error }}
     </div>
     {% endif %}
 
     {% if computers_data %}
-        <div class="space-y-6">
+        <div class="space-y-8">
             {% for item in computers_data %}
             {% set comp = item.computer %}
-            <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden space-y-4 p-6">
-                <!-- Header & Metadata -->
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 space-y-6">
+                <!-- Computer Header with Secondary Info Button -->
                 <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b">
                     <div>
                         <div class="flex items-center gap-3">
@@ -38,66 +38,121 @@
                             {% if comp.is_round_the_clock %}
                                 <span class="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-xs font-bold rounded-md">24/7 (RTC)</span>
                             {% endif %}
-                            <span class="px-2.5 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-md">{{ comp.status }}</span>
                         </div>
-                        <p class="text-sm text-gray-600 mt-1">
-                            <strong>IP:</strong> {{ comp.ip or '-' }} &bull; <strong>OS:</strong> {{ comp.os or '-' }} &bull; <strong>Кабинет:</strong> {{ comp.location or '-' }}
+                        <p class="text-xs text-gray-500 mt-1">
+                            Кабинет: {{ comp.location or 'не указан' }} &bull; Срок ТО по плану: <strong>{{ item.due_date.strftime('%d.%m.%Y') }}</strong>
                         </p>
                     </div>
 
-                    <!-- Scheduling Banner / Button -->
-                    <div class="flex items-center gap-3">
-                        {% if item.planned_event %}
-                            <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-900">
-                                <span class="font-semibold text-indigo-700">Запланировано ТО:</span>
-                                <strong>{{ item.planned_event.scheduled_date.strftime('%d.%m.%Y') }}</strong>
-                                <a href="/user/schedule/{{ comp.id }}" class="ml-2 text-indigo-600 hover:text-indigo-800 text-xs font-semibold underline">Изменить дату</a>
-                            </div>
-                        {% elif item.window_open %}
-                            <div class="p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center gap-4">
-                                <div class="text-xs text-amber-900 font-medium">
-                                    Открыто окно выбора даты! Срок: <strong>{{ item.due_date.strftime('%d.%m.%Y') }}</strong>
-                                </div>
-                                <a href="/user/schedule/{{ comp.id }}" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm rounded-md shadow-sm transition whitespace-nowrap">
-                                    Выберите дату ТО
-                                </a>
-                            </div>
-                        {% else %}
-                            <div class="text-xs text-gray-500 text-right">
-                                Следующее ТО по плану:<br>
-                                <strong class="text-gray-700 text-sm">{{ item.due_date.strftime('%d.%m.%Y') }}</strong>
-                            </div>
-                        {% endif %}
+                    <!-- Secondary Button: Computer Details & History -->
+                    <div>
+                        <a href="/user/my-computers/{{ comp.id }}" id="info-btn-{{ comp.id }}"
+                           class="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg border border-gray-300 transition flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>Информация о моём компьютере</span>
+                        </a>
                     </div>
                 </div>
 
-                <!-- History Section -->
-                <div>
-                    <h3 class="text-base font-semibold text-gray-800 mb-3">История технического обслуживания (ТО)</h3>
-                    {% if item.past_events %}
-                        <div class="space-y-3">
-                            {% for ev in item.past_events %}
-                            <div class="p-3 border rounded-lg bg-gray-50 text-sm flex justify-between items-start">
+                <!-- PRIMARY ELEMENT: Date Selection / State Card -->
+                <div class="space-y-4">
+                    {% if item.planned_event %}
+                        <!-- Date Already Chosen -->
+                        <div class="p-5 bg-indigo-50 border border-indigo-200 rounded-xl space-y-3">
+                            <div class="flex items-center justify-between">
                                 <div>
-                                    <div class="flex items-center gap-2">
-                                        <strong class="text-gray-900">{{ ev.scheduled_date.strftime('%d.%m.%Y') }}</strong>
-                                        {% if ev.status == 'done' %}
-                                            <span class="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded font-medium">Выполнено</span>
-                                        {% elif ev.status == 'missed' %}
-                                            <span class="px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded font-medium">Пропущено</span>
-                                        {% else %}
-                                            <span class="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded font-medium">{{ ev.status }}</span>
-                                        {% endif %}
+                                    <span class="text-xs uppercase tracking-wider text-indigo-600 font-bold">Выбранная дата технического обслуживания:</span>
+                                    <div class="text-2xl font-bold text-indigo-900 mt-0.5">
+                                        {{ item.planned_event.scheduled_date.strftime('%d.%m.%Y') }}
                                     </div>
-                                    {% if ev.comment %}
-                                        <p class="text-xs text-gray-600 mt-1">Комментарий: {{ ev.comment }}</p>
-                                    {% endif %}
                                 </div>
+                                <button type="button" onclick="document.getElementById('edit-picker-{{ comp.id }}').classList.toggle('hidden')"
+                                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition shadow-sm">
+                                    Изменить дату
+                                </button>
                             </div>
-                            {% endfor %}
+
+                            <!-- Optional Hidden Reschedule Form -->
+                            <div id="edit-picker-{{ comp.id }}" class="hidden pt-4 border-t border-indigo-200 space-y-3">
+                                <h3 class="text-sm font-bold text-indigo-900">Выберите новую дату обслуживания:</h3>
+                                {% if item.available_dates %}
+                                    <form action="/user/schedule/{{ comp.id }}" method="POST" class="space-y-3">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                                            {% for dt in item.available_dates %}
+                                            <label class="flex items-center p-2.5 bg-white border border-indigo-200 rounded-lg cursor-pointer hover:bg-indigo-100 transition text-xs">
+                                                <input type="radio" name="scheduled_date_str" value="{{ dt.date_str }}" required class="text-indigo-600">
+                                                <span class="ml-2 font-semibold text-gray-800">{{ dt.formatted }}</span>
+                                            </label>
+                                            {% endfor %}
+                                        </div>
+                                        <button type="submit" class="px-5 py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg shadow hover:bg-indigo-700 transition">
+                                            Сохранить новую дату
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <p class="text-xs text-indigo-800 italic">Нет свободных рабочих дат для переноса.</p>
+                                {% endif %}
+                            </div>
                         </div>
-                    {% else %}
-                        <p class="text-xs text-gray-500 italic">История ранее проведенных ТО отсутствует.</p>
+
+                    {% elif item.window_state == 'active' %}
+                        <!-- Primary Date Picker Calendar / List -->
+                        <div class="p-5 bg-amber-50 border border-amber-300 rounded-xl space-y-4">
+                            <div class="flex items-center justify-between border-b border-amber-200 pb-2">
+                                <h3 class="text-lg font-bold text-amber-900 flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                    Выберите дату технического обслуживания (ТО)
+                                </h3>
+                                <span class="text-xs text-amber-800 font-semibold">Срок до {{ item.due_date.strftime('%d.%m.%Y') }}</span>
+                            </div>
+
+                            {% if item.available_dates %}
+                                <form action="/user/schedule/{{ comp.id }}" method="POST" class="space-y-4">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto p-1">
+                                        {% for dt in item.available_dates %}
+                                        <label class="flex items-center p-3 bg-white border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition shadow-sm">
+                                            <input type="radio" name="scheduled_date_str" value="{{ dt.date_str }}" required class="text-amber-600 focus:ring-amber-500 h-4 w-4">
+                                            <div class="ml-3">
+                                                <span class="block font-bold text-gray-900 text-sm">{{ dt.formatted }}</span>
+                                                <span class="block text-xs text-gray-500">Свободен техник &bull; {{ dt.description or 'Рабочий день' }}</span>
+                                            </div>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+
+                                    <div class="pt-2 flex justify-end">
+                                        <button type="submit" class="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm rounded-lg shadow transition">
+                                            Выбрать эту дату
+                                        </button>
+                                    </div>
+                                </form>
+                            {% else %}
+                                <p class="text-xs text-amber-900 italic">К сожалению, нет доступных свободных рабочих дней в окне выбора. Обратитесь к администратору.</p>
+                            {% endif %}
+                        </div>
+
+                    {% elif item.window_state == 'future' %}
+                        <!-- Window Not Open Yet -->
+                        <div class="p-5 bg-gray-50 border border-gray-200 rounded-xl space-y-1">
+                            <div class="text-sm font-semibold text-gray-800">
+                                Окно выбора откроется {{ item.prompt_start_date.strftime('%d.%m.%Y') }}
+                            </div>
+                            <p class="text-xs text-gray-500">
+                                До {{ item.due_date.strftime('%d.%m.%Y') }} вы получите возможность выбрать удобную дату обслуживания.
+                            </p>
+                        </div>
+
+                    {% elif item.window_state == 'expired' %}
+                        <!-- Window Expired -->
+                        <div class="p-5 bg-red-50 border border-red-200 rounded-xl space-y-2 text-red-900 text-xs">
+                            <div class="font-bold text-sm text-red-800 flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                Срок выбора даты ТО истек (был {{ item.due_date.strftime('%d.%m.%Y') }})
+                            </div>
+                            <p>
+                                Автоматически отправлено ежедневное напоминание и эскалация технику и администратору. Окно выбора перенесено вперед на 1 месяц.
+                            </p>
+                        </div>
                     {% endif %}
                 </div>
             </div>

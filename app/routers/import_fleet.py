@@ -54,6 +54,22 @@ def import_page(request: Request, error: str | None = None, current_user: User =
     )
 
 
+@router.get("/docs/fleet-import-format", response_class=HTMLResponse)
+def import_doc_page(request: Request, current_user: User = Depends(require_admin)):
+    return templates.TemplateResponse(
+        "admin/doc_import.html",
+        context_with_defaults(request, current_user, {"columns": FLEET_IMPORT_COLUMNS}),
+    )
+
+
+@router.get("/fleet-import-format.md", response_class=HTMLResponse)
+def legacy_import_doc_route(request: Request, current_user: User = Depends(require_admin)):
+    return templates.TemplateResponse(
+        "admin/doc_import.html",
+        context_with_defaults(request, current_user, {"columns": FLEET_IMPORT_COLUMNS}),
+    )
+
+
 @router.get("/template")
 def download_import_template(current_user: User = Depends(require_admin)):
     template_bytes = build_template()

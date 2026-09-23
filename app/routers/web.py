@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, Form, Request, Response, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
+    get_current_user,
     get_current_user_optional,
     require_admin,
 )
@@ -50,9 +51,20 @@ def index(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/set-locale")
-def set_locale(locale: str, request: Request, response: Response):
-    target_locale = locale if locale in ("ru", "en") else "ru"
+def set_locale(
+    request: Request,
+    locale: str | None = Query(None),
+    lang: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    target_locale = locale or lang
+    target_locale = target_locale if target_locale in ("ru", "en") else "ru"
     referer = request.headers.get("referer", "/")
+    current_user = get_current_user_optional(request, db)
+    if current_user:
+        current_user.locale = target_locale
+        db.add(current_user)
+        db.commit()
     resp = RedirectResponse(url=referer, status_code=status.HTTP_302_FOUND)
     resp.set_cookie(key="locale", value=target_locale, httponly=True)
     return resp
@@ -86,12 +98,12 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
 
 @router.get("/auth/magic-link")
 def magic_link_login(token: str, request: Request, db: Session = Depends(get_db)):
-    data = verify_magic_link_token(token)
+    data = verify_magic_link_token(token, db=db)
     if not data:
         return templates.TemplateResponse(
             "login.html",
             context_with_defaults(request, None, {"error": "invalid_token"}),
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_401_UNAUTHORIZED,
         )
     user_id = data.get("user_id")
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
@@ -99,7 +111,7 @@ def magic_link_login(token: str, request: Request, db: Session = Depends(get_db)
         return templates.TemplateResponse(
             "login.html",
             context_with_defaults(request, None, {"error": "invalid_token"}),
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
     session_token = generate_session_cookie(user.id)
@@ -116,6 +128,36 @@ def logout():
     resp = RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
     resp.delete_cookie(key="session")
     return resp
+
+
+@router.get("/technician/schedule", response_class=HTMLResponse)
+def technician_schedule_page(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.ADMIN, UserRole.TECHNICIAN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return templates.TemplateResponse("technician_schedule.html", context_with_defaults(request, current_user))
+
+
+@router.get("/reports", response_class=HTMLResponse)
+def reports_page(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.ADMIN, UserRole.TECHNICIAN, UserRole.OBSERVER):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return templates.TemplateResponse("reports.html", context_with_defaults(request, current_user))
+
+
+@router.get("/docs/fleet-import-format.md", response_class=HTMLResponse)
+def root_docs_import_format(request: Request, current_user: User = Depends(require_admin)):
+    from app.importer.schema import FLEET_IMPORT_COLUMNS
+
+    return templates.TemplateResponse(
+        "admin/doc_import.html",
+        context_with_defaults(request, current_user, {"columns": FLEET_IMPORT_COLUMNS}),
+    )
 
 
 @router.get("/admin/dashboard", response_class=HTMLResponse)

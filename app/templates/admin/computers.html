@@ -69,6 +69,11 @@
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('location', locale) }}</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('owner', locale) }}</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">24/7</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <a href="/admin/computers?sort_by=last_maintenance_at&sort_order={% if sort_by == 'last_maintenance_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}&q={{ search or '' }}&location={{ location_filter or '' }}&rtc={{ rtc_filter or '' }}&owner_id={{ owner_filter or '' }}">
+                            {{ translate('last_maintenance', locale) }} {% if sort_by == 'last_maintenance_at' %}{{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}
+                        </a>
+                    </th>
                     <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ translate('actions', locale) }}</th>
                 </tr>
             </thead>
@@ -93,6 +98,13 @@
                             <span class="text-gray-400">-</span>
                         {% endif %}
                     </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {% if c.last_maintenance_at %}
+                            {{ c.last_maintenance_at.strftime('%Y-%m-%d') }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                         <a href="/admin/computers/{{ c.id }}/edit" class="text-indigo-600 hover:text-indigo-900">{{ translate('edit', locale) }}</a>
                         <form action="/admin/computers/{{ c.id }}/delete" method="POST" class="inline" onsubmit="return confirm('Вы уверены, что хотите удалить компьютер?');">
@@ -102,7 +114,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">Компьютеры не найдены.</td>
+                    <td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">Компьютеры не найдены.</td>
                 </tr>
                 {% endfor %}
             </tbody>

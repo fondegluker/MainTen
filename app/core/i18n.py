@@ -60,6 +60,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "preview_import": "Предпросмотр импорта",
         "confirm_import": "Подтвердить импорт",
         "import_success": "Импорт успешно завершен",
+        "last_maintenance": "Дата последнего обслуживания",
     },
     "en": {
         "app_title": "Computer Fleet Maintenance Scheduler",
@@ -120,20 +121,29 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "preview_import": "Preview Import",
         "confirm_import": "Confirm Import",
         "import_success": "Import completed successfully",
+        "last_maintenance": "Last maintenance",
     },
 }
 
 
 def get_locale(request: Request | None = None, user_locale: str | None = None) -> str:
+    # 1. Explicit query parameter ?lang= or ?locale=
+    if request:
+        lang_param = request.query_params.get("lang") or request.query_params.get("locale")
+        if lang_param in ("ru", "en"):
+            return lang_param
+
+    # 2. Authenticated user DB locale
     if user_locale in ("ru", "en"):
         return user_locale
+
+    # 3. Cookie locale
     if request:
         cookie_locale = request.cookies.get("locale")
         if cookie_locale in ("ru", "en"):
             return cookie_locale
-        accept_lang = request.headers.get("Accept-Language", "")
-        if "en" in accept_lang.lower() and "ru" not in accept_lang.lower():
-            return "en"
+
+    # 4. Default ru
     return "ru"
 
 

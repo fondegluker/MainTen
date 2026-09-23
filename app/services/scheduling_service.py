@@ -89,8 +89,22 @@ def get_available_dates(
 
     capacity_per_tech = int(get_setting_value(db, "technician_daily_capacity", 1))
 
+    if not computer.next_maintenance_due_at:
+        computer.next_maintenance_due_at = compute_next_maintenance_due_at(computer, db)
+        db.add(computer)
+        db.commit()
+
+    due_date = (
+        computer.next_maintenance_due_at.date()
+        if isinstance(computer.next_maintenance_due_at, datetime)
+        else computer.next_maintenance_due_at
+    )
+
+    end_date = (
+        min(today + timedelta(days=days_ahead), due_date) if due_date >= today else today + timedelta(days=days_ahead)
+    )
+
     # Query calendar for future dates
-    end_date = today + timedelta(days=days_ahead)
     calendar_entries = (
         db.query(WorkingCalendar)
         .filter(WorkingCalendar.date > today, WorkingCalendar.date <= end_date, WorkingCalendar.is_working == True)

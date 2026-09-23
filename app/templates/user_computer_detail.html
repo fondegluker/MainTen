@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Информация о компьютере - CFMS{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">{{ computer.hostname }}</h1>
+            <p class="text-sm text-gray-600">Подробная информация о компьютере и история ТО</p>
+        </div>
+        <a href="/user/my-computers" class="px-4 py-2 bg-gray-200 text-gray-800 text-sm font-medium rounded-md hover:bg-gray-300 transition">&larr; К выбору даты</a>
+    </div>
+
+    <!-- Computer Metadata Card -->
+    <div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+        <h2 class="text-xl font-bold text-gray-800 border-b pb-2">Характеристики ПК</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div><strong>Имя хоста:</strong> {{ computer.hostname }}</div>
+            <div><strong>IP-адрес:</strong> {{ computer.ip or '-' }}</div>
+            <div><strong>MAC-адрес:</strong> {{ computer.mac or '-' }}</div>
+            <div><strong>ОС:</strong> {{ computer.os or '-' }}</div>
+            <div><strong>Кабинет / Расположение:</strong> {{ computer.location or '-' }}</div>
+            <div><strong>Режим 24/7 (RTC):</strong> {{ 'Да' if computer.is_round_the_clock else 'Нет' }}</div>
+            <div><strong>Дата последнего обслуживания:</strong> {{ computer.last_maintenance_at.strftime('%d.%m.%Y') if computer.last_maintenance_at else '—' }}</div>
+            <div>
+                <strong>Запланированное ТО:</strong>
+                {% if planned_event %}
+                    <span class="font-semibold text-indigo-700">{{ planned_event.scheduled_date.strftime('%d.%m.%Y') }}</span>
+                {% else %}
+                    <span class="text-gray-500">Не запланировано</span>
+                {% endif %}
+            </div>
+        </div>
+        {% if computer.notes %}
+            <div class="pt-2 border-t text-xs text-gray-600">
+                <strong>Заметки:</strong> {{ computer.notes }}
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- History Section with Checklists -->
+    <div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-4">
+        <h2 class="text-xl font-bold text-gray-800 border-b pb-2">История проведенных ТО</h2>
+        {% if past_events %}
+            <div class="space-y-4">
+                {% for ev in past_events %}
+                <div class="p-4 border rounded-lg bg-gray-50 text-sm space-y-2">
+                    <div class="flex items-center justify-between">
+                        <strong class="text-base text-gray-900">{{ ev.scheduled_date.strftime('%d.%m.%Y') }}</strong>
+                        {% if ev.status == 'done' %}
+                            <span class="px-2.5 py-0.5 bg-green-100 text-green-800 text-xs font-semibold rounded-md">Выполнено</span>
+                        {% elif ev.status == 'missed' %}
+                            <span class="px-2.5 py-0.5 bg-red-100 text-red-800 text-xs font-semibold rounded-md">Пропущено</span>
+                        {% else %}
+                            <span class="px-2.5 py-0.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-md">{{ ev.status }}</span>
+                        {% endif %}
+                    </div>
+                    {% if ev.comment %}
+                        <p class="text-xs text-gray-600"><strong>Комментарий техника:</strong> {{ ev.comment }}</p>
+                    {% endif %}
+
+                    {% if ev.checks %}
+                        <div class="pt-2 border-t text-xs space-y-1">
+                            <div class="font-semibold text-gray-700">Чек-лист обслуживания:</div>
+                            {% for chk in ev.checks %}
+                            <div class="flex items-center gap-2">
+                                <span>{{ '✓' if chk.is_done else '✗' }}</span>
+                                <span>{{ chk.protocol_item.title_ru if chk.protocol_item else 'Пункт протокола' }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-sm text-gray-500 italic">История раннее проведенных ТО отсутствует.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

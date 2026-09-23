@@ -1,6 +1,6 @@
-"""User routes for CFMS (Iteration 4)."""
+"""User routes for CFMS (Iteration 4 + Defect 8 fixes)."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -14,7 +14,7 @@ from app.routers.web import context_with_defaults
 from app.services.scheduling_service import (
     compute_next_maintenance_due_at,
     get_available_dates,
-    is_notification_window_open,
+    get_setting_value,
     schedule_maintenance,
 )
 
@@ -30,7 +30,7 @@ def user_computers_page(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Page listing all computers owned by current user with history and schedule prompt."""
+    """Page listing user's computers with primary date picker and selection window state."""
     if current_user.role == UserRole.ADMIN:
         computers = db.query(Computer).all()
     else:
@@ -38,6 +38,7 @@ def user_computers_page(
 
     computers_data = []
     today = datetime.now(timezone.utc).date()
+    window_days = int(get_setting_value(db, "selection_window_days", 20))
 
     for comp in computers:
         if not comp.next_maintenance_due_at:
@@ -46,10 +47,18 @@ def user_computers_page(
 
         due_date = (
             comp.next_maintenance_due_at.date()
-            if hasattr(comp.next_maintenance_due_at, "date")
+            if isinstance(comp.next_maintenance_due_at, datetime)
             else comp.next_maintenance_due_at
         )
-        window_open = is_notification_window_open(comp, db, today=today)
+
+        prompt_start_date = due_date - timedelta(days=window_days)
+
+        if today < prompt_start_date:
+            window_state = "future"
+        elif prompt_start_date <= today <= due_date:
+            window_state = "active"
+        else:
+            window_state = "expired"
 
         # Get planned event if any
         planned_event = (
@@ -57,6 +66,10 @@ def user_computers_page(
             .filter(MaintenanceEvent.computer_id == comp.id, MaintenanceEvent.status == MaintenanceEventStatus.PLANNED)
             .first()
         )
+
+        available_dates = []
+        if window_state == "active" or planned_event:
+            available_dates = get_available_dates(comp.id, db, today=today, days_ahead=window_days)
 
         # Get past maintenance events with details
         past_events = (
@@ -75,8 +88,11 @@ def user_computers_page(
             {
                 "computer": comp,
                 "due_date": due_date,
-                "window_open": window_open,
+                "prompt_start_date": prompt_start_date,
+                "window_state": window_state,
+                "window_open": window_state == "active",
                 "planned_event": planned_event,
+                "available_dates": available_dates,
                 "past_events": past_events,
                 "is_manager": len(computers) > 1,
             }
@@ -99,6 +115,53 @@ def user_computers_page(
     )
 
 
+@router.get("/my-computers/{computer_id}", response_class=HTMLResponse)
+def user_computer_detail_page(
+    computer_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Detailed computer info route showing specs, last maintenance date, and full history with checklists."""
+    computer = db.query(Computer).filter(Computer.id == computer_id).first()
+    if not computer:
+        return RedirectResponse(url="/user/my-computers?error=Компьютер+не+найден", status_code=status.HTTP_302_FOUND)
+
+    if current_user.role != UserRole.ADMIN and computer.owner_user_id != current_user.id:
+        return RedirectResponse(url="/user/my-computers?error=Доступ+запрещен", status_code=status.HTTP_302_FOUND)
+
+    planned_event = (
+        db.query(MaintenanceEvent)
+        .filter(MaintenanceEvent.computer_id == computer.id, MaintenanceEvent.status == MaintenanceEventStatus.PLANNED)
+        .first()
+    )
+
+    past_events = (
+        db.query(MaintenanceEvent)
+        .filter(
+            MaintenanceEvent.computer_id == computer.id,
+            MaintenanceEvent.status.in_(
+                [MaintenanceEventStatus.DONE, MaintenanceEventStatus.MISSED, MaintenanceEventStatus.CANCELLED]
+            ),
+        )
+        .order_by(MaintenanceEvent.scheduled_date.desc())
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        "user_computer_detail.html",
+        context_with_defaults(
+            request,
+            current_user,
+            {
+                "computer": computer,
+                "planned_event": planned_event,
+                "past_events": past_events,
+            },
+        ),
+    )
+
+
 @router.get("/schedule/{computer_id}", response_class=HTMLResponse)
 def schedule_date_picker_page(
     computer_id: int,
@@ -107,7 +170,7 @@ def schedule_date_picker_page(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Page displaying available working days for user to pick a maintenance date."""
+    """Fallback schedule page."""
     computer = db.query(Computer).filter(Computer.id == computer_id).first()
     if not computer:
         return RedirectResponse(url="/user/my-computers?error=Компьютер+не+найден", status_code=status.HTTP_302_FOUND)
@@ -158,7 +221,7 @@ def submit_schedule_date(
         today = datetime.now(timezone.utc).date()
         if selected_date <= today:
             return RedirectResponse(
-                url=f"/user/schedule/{computer_id}?error=Выберите+будущую+дату", status_code=status.HTTP_302_FOUND
+                url="/user/my-computers?error=Выберите+будущую+дату", status_code=status.HTTP_302_FOUND
             )
 
         schedule_maintenance(computer.id, selected_date, current_user.id, db)
@@ -167,4 +230,4 @@ def submit_schedule_date(
             status_code=status.HTTP_302_FOUND,
         )
     except ValueError as exc:
-        return RedirectResponse(url=f"/user/schedule/{computer_id}?error={exc}", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(url=f"/user/my-computers?error={exc}", status_code=status.HTTP_302_FOUND)

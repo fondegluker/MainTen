@@ -9,18 +9,101 @@
         Пользователь: <strong>{{ edit_user.username }}</strong> ({{ edit_user.email_or_login }})
     </p>
 
+    <div id="status-msg" class="p-3 bg-green-100 border border-green-300 text-green-800 rounded-md text-sm {% if not message %}hidden{% endif %}">
+        {{ message or 'Новая ссылка сгенерирована' }}
+    </div>
+
     <div class="space-y-2">
         <label class="block text-sm font-medium text-gray-700">Сгенерированная ссылка для входа:</label>
-        <input type="text" readonly value="{{ magic_url }}"
-               class="w-full px-3 py-2 border border-gray-300 bg-gray-50 rounded-md font-mono text-sm text-indigo-700 select-all">
+        <div class="flex items-center gap-2">
+            <input type="text" id="magic-url-input" readonly value="{{ magic_url }}"
+                   class="w-full px-3 py-2 border border-gray-300 bg-gray-50 rounded-md font-mono text-sm text-indigo-700 select-all">
+
+            <!-- Copy Button -->
+            <button type="button" id="copy-btn"
+                    class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium transition whitespace-nowrap flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                <span id="copy-text">Скопировать</span>
+            </button>
+
+            <!-- Open Button -->
+            <a id="open-btn" href="{{ magic_url }}" target="_blank" rel="noopener noreferrer"
+               class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-sm font-medium transition whitespace-nowrap flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                <span>Открыть</span>
+            </a>
+        </div>
         <p class="text-xs text-gray-500">Передайте эту ссылку пользователю для входа в систему без пароля.</p>
     </div>
 
     <div class="flex items-center justify-between pt-4 border-t">
-        <form action="/admin/users/{{ edit_user.id }}/magic-link" method="POST">
-            <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-md font-medium hover:bg-purple-700 transition">Сгенерировать новую ссылку</button>
+        <form id="regenerate-form" action="/admin/users/{{ edit_user.id }}/magic-link/regenerate" method="POST">
+            <button type="submit" id="regenerate-btn" class="px-4 py-2 bg-purple-600 text-white rounded-md font-medium hover:bg-purple-700 transition">
+                Сгенерировать новую ссылку
+            </button>
         </form>
         <a href="/admin/users" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-medium hover:bg-gray-300 transition">Назад к списку</a>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const copyBtn = document.getElementById('copy-btn');
+    const copyText = document.getElementById('copy-text');
+    const magicInput = document.getElementById('magic-url-input');
+    const openBtn = document.getElementById('open-btn');
+    const regenForm = document.getElementById('regenerate-form');
+    const statusMsg = document.getElementById('status-msg');
+
+    function showCopyFeedback() {
+        copyText.textContent = 'Скопировано!';
+        copyBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+        copyBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+        setTimeout(() => {
+            copyText.textContent = 'Скопировать';
+            copyBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            copyBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+        }, 2000);
+    }
+
+    copyBtn.addEventListener('click', function() {
+        const val = magicInput.value;
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(val).then(showCopyFeedback).catch(fallbackCopy);
+        } else {
+            fallbackCopy();
+        }
+
+        function fallbackCopy() {
+            magicInput.select();
+            document.execCommand('copy');
+            showCopyFeedback();
+        }
+    });
+
+    regenForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        try {
+            const response = await fetch('/admin/users/{{ edit_user.id }}/magic-link/regenerate', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                magicInput.value = data.magic_url;
+                openBtn.href = data.magic_url;
+                statusMsg.textContent = `${data.message} (${data.timestamp})`;
+                statusMsg.classList.remove('hidden');
+            } else {
+                regenForm.submit();
+            }
+        } catch (err) {
+            regenForm.submit();
+        }
+    });
+});
+</script>
 {% endblock %}

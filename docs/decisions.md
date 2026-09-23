@@ -72,7 +72,12 @@ The repository integrates shell scripts for deployment and local testing:
   - `/admin/computers`: Fleet device management with hostname, IP, MAC, OS, location, user owner association ("Manager" virtual property support), 24/7 (RTC) flags, pagination, sorting, and IP/MAC format validations.
   - `/admin/technicians`: Specialized view filtering users by `TECHNICIAN` role with daily maintenance capacity configuration (default 1).
 
+### Magic Link Token Invalidation & Security Status Code
+- **Token Invalidation**: Magic link tokens embed a `version` field. Re-issuing a magic link increments `magic_token_version_{user_id}` in the `settings` table, rendering all previously issued tokens invalid.
+- **HTTP Status Code**: Verification of expired or invalidated magic-link tokens returns HTTP `401 Unauthorized` with clear error messaging.
+
 ### Excel Fleet Import with Preview, Diffs & Hard Error Enforcement
+- **Documentation Route (Option B)**: The fleet import documentation link is served dynamically via `GET /admin/docs/fleet-import-format` (and top-level `/docs/fleet-import-format.md`) requiring ADMIN authentication. The endpoint renders `FLEET_IMPORT_COLUMNS` schema details with HTTP 200.
 - **Library**: `openpyxl` is used for parsing `.xlsx` spreadsheets and generating the downloadable template (`/admin/import/template`).
 - **Staging, Diffing & Validation**:
   - `POST /admin/import/preview`: Parses uploaded `.xlsx` file, normalizes header columns (supporting both EN and RU headers), resolves user owner IDs, validates missing mandatory fields, checks IP/MAC regex formats, detects duplicates within the file, and classifies row diffs (`new`, `update`, `conflict`).

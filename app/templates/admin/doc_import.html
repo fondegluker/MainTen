@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Документация по импорту техники - CFMS{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto bg-white p-8 border border-gray-200 rounded-xl shadow-sm space-y-6">
+    <div class="flex items-center justify-between border-b pb-4">
+        <h1 class="text-2xl font-bold text-gray-900">Спецификация и формат файла импорта парка ПК</h1>
+        <a href="/admin/import" class="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm rounded-md font-medium transition">&larr; К импорту</a>
+    </div>
+
+    <div class="prose max-w-none text-sm text-gray-800 space-y-4">
+        <p class="font-mono bg-gray-50 p-2 rounded text-xs text-indigo-700 font-semibold">FLEET_IMPORT_COLUMNS Schema Specification</p>
+
+        <h2 class="text-lg font-bold text-gray-900">Колонки спецификации импорта (Fleet Import Columns)</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 border border-gray-200 text-xs">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700">Header (EN)</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700">Header (RU)</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700">Target Field</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700">Type</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700">Required</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700">Example</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700">Description</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for col in columns %}
+                    <tr>
+                        <td class="px-3 py-2 font-mono text-indigo-700 font-semibold">{{ col.header_en }}</td>
+                        <td class="px-3 py-2 font-mono text-gray-800">{{ col.header_ru }}</td>
+                        <td class="px-3 py-2 text-gray-600">{{ col.field_name }}</td>
+                        <td class="px-3 py-2 text-gray-600">{{ col.type_name }}</td>
+                        <td class="px-3 py-2 font-semibold {% if col.required %}text-red-600{% else %}text-gray-500{% endif %}">
+                            {{ 'Да' if col.required else 'Нет' }}
+                        </td>
+                        <td class="px-3 py-2 font-mono text-gray-700">{{ col.example_value }}</td>
+                        <td class="px-3 py-2 text-gray-600">{{ col.description_ru }} / {{ col.description_en }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

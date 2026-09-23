@@ -63,6 +63,28 @@ All pull requests and branch merges must pass the following required CI checks i
 
 ---
 
+## Iteration 4 & Defect Hotfix Resolutions
+
+- **Defect 1 (Technician Schedule & Reports Pages)**:
+  - Registered `GET /technician/schedule` (HTTP 200 for `ADMIN` and `TECHNICIAN`, 403 for unauthorized roles).
+  - Registered `GET /reports` (HTTP 200 for `ADMIN`, `TECHNICIAN`, and `OBSERVER`, 403 for `USER`).
+- **Defect 2 (Fleet Import Documentation Link)**:
+  - Served `GET /admin/docs/fleet-import-format` and top-level `/docs/fleet-import-format.md` (Option B) displaying `FLEET_IMPORT_COLUMNS` specification with HTTP 200 for `ADMIN`.
+- **Defect 3 (Locale Switcher Persistence)**:
+  - Enforced locale resolution priority in `get_locale()`: 1) `?lang=`, 2) `users.locale` DB setting, 3) `locale` cookie, 4) `ru` default.
+  - Updated `/set-locale` to persist `users.locale` in the database for authenticated users.
+- **Defects 4 & 5 (Magic Link Buttons & Token Invalidation)**:
+  - Added Copy (clipboard API + fallback) and Open (`_blank`) buttons on magic link page.
+  - Implemented token versioning in `settings` (`magic_token_version_{user_id}`) so regenerating a magic link invalidates previous links (returning HTTP 401 Unauthorized for old tokens).
+  - Added `POST /admin/users/{id}/magic-link/regenerate` returning JSON with fresh URL, timestamp, and audit logging.
+- **Defects 6 & 7 (Last Maintenance Date Listing & Form Editing)**:
+  - Added sortable "Last Maintenance Date" column to `computers.html` listing page.
+  - Added date picker input on computer edit form with lower/upper bound validation (`2000-01-01 <= date <= today`), automatic recalculation of `next_maintenance_due_at`, and before/after audit logging.
+- **Defect 8 (Primary Date Picker & Secondary Computer Details)**:
+  - Redesigned `/user/my-computers` so the Date Picker is rendered inline as the PRIMARY element for active selection windows.
+  - Handled window states: future window ("Окно выбора откроется <date>"), active window (inline picker), and expired window (escalation message).
+  - Added secondary "Информация о моём компьютере" button linking to `/user/my-computers/{id}` showing computer specs and full history.
+
 ## Iteration 4 Features & Scope
 
 - **Scheduling Engine (`app/services/scheduling_service.py`)**:

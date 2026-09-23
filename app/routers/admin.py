@@ -1,6 +1,6 @@
 from math import ceil
 
-from fastapi import APIRouter, Depends, Form, Query, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
@@ -253,6 +253,23 @@ def reset_password(
     return RedirectResponse(url="/admin/users?message=Пароль+сброшен", status_code=status.HTTP_302_FOUND)
 
 
+def _get_current_magic_token_version(user_id: int, db: Session) -> int:
+    setting = db.query(Setting).filter(Setting.key == f"magic_token_version_{user_id}").first()
+    return setting.value_json if setting else 0
+
+
+def _increment_magic_token_version(user_id: int, db: Session) -> int:
+    setting_key = f"magic_token_version_{user_id}"
+    setting = db.query(Setting).filter(Setting.key == setting_key).first()
+    if setting:
+        setting.value_json = (setting.value_json or 0) + 1
+    else:
+        setting = Setting(key=setting_key, value_json=1)
+        db.add(setting)
+    db.commit()
+    return setting.value_json
+
+
 @router.get("/users/{user_id}/magic-link", response_class=HTMLResponse)
 def get_magic_link(
     user_id: int, request: Request, current_user: User = Depends(require_admin), db: Session = Depends(get_db)
@@ -261,7 +278,8 @@ def get_magic_link(
     if not user:
         return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
-    token = generate_magic_link_token(user.id)
+    ver = _get_current_magic_token_version(user.id, db)
+    token = generate_magic_link_token(user.id, token_version=ver)
     magic_url = f"{request.base_url}auth/magic-link?token={token}"
 
     return templates.TemplateResponse(
@@ -270,12 +288,40 @@ def get_magic_link(
     )
 
 
+@router.post("/users/{user_id}/magic-link/regenerate")
 @router.post("/users/{user_id}/magic-link")
-def reissue_magic_link(user_id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def reissue_magic_link(
+    user_id: int, request: Request, current_user: User = Depends(require_admin), db: Session = Depends(get_db)
+):
     user = db.query(User).filter(User.id == user_id).first()
-    if user:
-        log_audit(db=db, actor_user_id=current_user.id, action="reissue_magic_link", entity="users", entity_id=user.id)
-    return RedirectResponse(url=f"/admin/users/{user_id}/magic-link", status_code=status.HTTP_302_FOUND)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    new_ver = _increment_magic_token_version(user.id, db)
+    token = generate_magic_link_token(user.id, token_version=new_ver)
+    magic_url = f"{request.base_url}auth/magic-link?token={token}"
+
+    log_audit(db=db, actor_user_id=current_user.id, action="reissue_magic_link", entity="users", entity_id=user.id)
+
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept or request.headers.get("x-requested-with") == "XMLHttpRequest":
+        from datetime import datetime, timezone
+
+        now_str = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S")
+        return {
+            "magic_url": magic_url,
+            "message": "Новая ссылка сгенерирована",
+            "timestamp": now_str,
+        }
+
+    return templates.TemplateResponse(
+        "admin/magic_link.html",
+        context_with_defaults(
+            request,
+            current_user,
+            {"edit_user": user, "magic_url": magic_url, "message": "Новая ссылка сгенерирована"},
+        ),
+    )
 
 
 @router.post("/users/{user_id}/deactivate")
@@ -449,6 +495,7 @@ def create_computer(
     os: str | None = Form(None),
     location: str | None = Form(None),
     owner_user_id: str | None = Form(None),
+    last_maintenance_at: str | None = Form(None),
     is_round_the_clock: bool | None = Form(False),
     notes: str | None = Form(None),
     current_user: User = Depends(require_admin),
@@ -489,6 +536,53 @@ def create_computer(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    from datetime import date, datetime, timezone
+
+    parsed_last_maint = None
+    if last_maintenance_at and last_maintenance_at.strip():
+        try:
+            maint_date = date.fromisoformat(last_maintenance_at.strip())
+            today = datetime.now(timezone.utc).date()
+            if maint_date > today:
+                return templates.TemplateResponse(
+                    "admin/computer_form.html",
+                    context_with_defaults(
+                        request,
+                        current_user,
+                        {
+                            "edit_computer": None,
+                            "users": users,
+                            "error": "Дата последнего обслуживания не может быть в будущем.",
+                        },
+                    ),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            if maint_date < date(2000, 1, 1):
+                return templates.TemplateResponse(
+                    "admin/computer_form.html",
+                    context_with_defaults(
+                        request,
+                        current_user,
+                        {
+                            "edit_computer": None,
+                            "users": users,
+                            "error": "Дата последнего обслуживания не может быть ранее 01.01.2000.",
+                        },
+                    ),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            parsed_last_maint = datetime.combine(maint_date, datetime.min.time())
+        except ValueError:
+            return templates.TemplateResponse(
+                "admin/computer_form.html",
+                context_with_defaults(
+                    request,
+                    current_user,
+                    {"edit_computer": None, "users": users, "error": "Некорректный формат даты."},
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
     parsed_owner_id = int(owner_user_id) if owner_user_id and owner_user_id.isdigit() else None
 
     computer = Computer(
@@ -499,9 +593,16 @@ def create_computer(
         location=location.strip() if location else None,
         owner_user_id=parsed_owner_id,
         is_round_the_clock=bool(is_round_the_clock),
+        last_maintenance_at=parsed_last_maint,
         notes=notes.strip() if notes else None,
         status="active",
     )
+
+    from app.services.scheduling_service import compute_next_maintenance_due_at
+
+    due_d = compute_next_maintenance_due_at(computer, db)
+    computer.next_maintenance_due_at = datetime.combine(due_d, datetime.min.time())
+
     db.add(computer)
     db.commit()
     db.refresh(computer)
@@ -517,6 +618,10 @@ def create_computer(
             "ip": computer.ip,
             "owner_user_id": computer.owner_user_id,
             "is_round_the_clock": computer.is_round_the_clock,
+            "last_maintenance_at": computer.last_maintenance_at.isoformat() if computer.last_maintenance_at else None,
+            "next_maintenance_due_at": computer.next_maintenance_due_at.isoformat()
+            if computer.next_maintenance_due_at
+            else None,
         },
     )
 
@@ -550,6 +655,7 @@ def update_computer(
     os: str | None = Form(None),
     location: str | None = Form(None),
     owner_user_id: str | None = Form(None),
+    last_maintenance_at: str | None = Form(None),
     is_round_the_clock: bool | None = Form(False),
     notes: str | None = Form(None),
     current_user: User = Depends(require_admin),
@@ -579,6 +685,53 @@ def update_computer(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    from datetime import date, datetime, timezone
+
+    parsed_last_maint = None
+    if last_maintenance_at and last_maintenance_at.strip():
+        try:
+            maint_date = date.fromisoformat(last_maintenance_at.strip())
+            today = datetime.now(timezone.utc).date()
+            if maint_date > today:
+                return templates.TemplateResponse(
+                    "admin/computer_form.html",
+                    context_with_defaults(
+                        request,
+                        current_user,
+                        {
+                            "edit_computer": computer,
+                            "users": users,
+                            "error": "Дата последнего обслуживания не может быть в будущем.",
+                        },
+                    ),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            if maint_date < date(2000, 1, 1):
+                return templates.TemplateResponse(
+                    "admin/computer_form.html",
+                    context_with_defaults(
+                        request,
+                        current_user,
+                        {
+                            "edit_computer": computer,
+                            "users": users,
+                            "error": "Дата последнего обслуживания не может быть ранее 01.01.2000.",
+                        },
+                    ),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            parsed_last_maint = datetime.combine(maint_date, datetime.min.time())
+        except ValueError:
+            return templates.TemplateResponse(
+                "admin/computer_form.html",
+                context_with_defaults(
+                    request,
+                    current_user,
+                    {"edit_computer": computer, "users": users, "error": "Некорректный формат даты."},
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
     before_state = {
         "hostname": computer.hostname,
         "ip": computer.ip,
@@ -587,6 +740,10 @@ def update_computer(
         "location": computer.location,
         "owner_user_id": computer.owner_user_id,
         "is_round_the_clock": computer.is_round_the_clock,
+        "last_maintenance_at": computer.last_maintenance_at.isoformat() if computer.last_maintenance_at else None,
+        "next_maintenance_due_at": computer.next_maintenance_due_at.isoformat()
+        if computer.next_maintenance_due_at
+        else None,
     }
 
     parsed_owner_id = int(owner_user_id) if owner_user_id and owner_user_id.isdigit() else None
@@ -598,7 +755,13 @@ def update_computer(
     computer.location = location.strip() if location else None
     computer.owner_user_id = parsed_owner_id
     computer.is_round_the_clock = bool(is_round_the_clock)
+    computer.last_maintenance_at = parsed_last_maint
     computer.notes = notes.strip() if notes else None
+
+    from app.services.scheduling_service import compute_next_maintenance_due_at
+
+    due_d = compute_next_maintenance_due_at(computer, db)
+    computer.next_maintenance_due_at = datetime.combine(due_d, datetime.min.time())
 
     db.commit()
 
@@ -610,6 +773,10 @@ def update_computer(
         "location": computer.location,
         "owner_user_id": computer.owner_user_id,
         "is_round_the_clock": computer.is_round_the_clock,
+        "last_maintenance_at": computer.last_maintenance_at.isoformat() if computer.last_maintenance_at else None,
+        "next_maintenance_due_at": computer.next_maintenance_due_at.isoformat()
+        if computer.next_maintenance_due_at
+        else None,
     }
 
     log_audit(
@@ -645,6 +812,16 @@ def delete_computer(computer_id: int, current_user: User = Depends(require_admin
         )
 
     return RedirectResponse(url="/admin/computers?message=Компьютер+удален", status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/docs/fleet-import-format", response_class=HTMLResponse)
+def admin_fleet_import_doc(request: Request, current_user: User = Depends(require_admin)):
+    from app.importer.schema import FLEET_IMPORT_COLUMNS
+
+    return templates.TemplateResponse(
+        "admin/doc_import.html",
+        context_with_defaults(request, current_user, {"columns": FLEET_IMPORT_COLUMNS}),
+    )
 
 
 # --- AUDIT LOG VIEWER ---
