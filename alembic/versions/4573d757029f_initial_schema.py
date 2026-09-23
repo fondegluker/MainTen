@@ -89,7 +89,7 @@ def upgrade() -> None:
     sa.Column('technician_id', sa.Integer(), nullable=True),
     sa.Column('scheduled_date', sa.Date(), nullable=True),
     sa.Column('scheduled_slot', sa.String(length=50), nullable=True),
-    sa.Column('status', sa.Enum('PLANNED', 'IN_PROGRESS', 'DONE', 'MISSED', 'CANCELLED', name='maintenanceeventstatus'), nullable=False),
+    sa.Column('status', sa.Enum('planned', 'in_progress', 'done', 'missed', 'cancelled', name='maintenanceeventstatus'), nullable=False),
     sa.Column('started_at', sa.DateTime(), nullable=True),
     sa.Column('finished_at', sa.DateTime(), nullable=True),
     sa.Column('comment', sa.Text(), nullable=True),

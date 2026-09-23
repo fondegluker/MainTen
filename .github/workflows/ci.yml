@@ -2,7 +2,7 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main, master, "jules-*" ]
+    branches: [ main, master, "jules-*", "iteration-2-*" ]
   pull_request:
     branches: [ main, master ]
 
@@ -54,3 +54,50 @@ jobs:
           SECRET_KEY: ci-secret-key-12345
         run: |
           pytest
+
+      - name: Build and Run Docker Compose Services
+        run: |
+          docker compose up -d --build
+
+      - name: Wait for Web Service Health
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8000/auth/login > /dev/null; then
+              echo "Web service is up!"
+              exit 0
+            fi
+            echo "Waiting for web service..."
+            sleep 2
+          done
+          echo "Web service failed to respond in time"
+          docker compose logs web
+          exit 1
+
+      - name: Run End-to-End Container Smoke Tests
+        run: |
+          python -c "
+          import httpx
+          client = httpx.Client(base_url='http://localhost:8000', follow_redirects=True)
+          login_res = client.post('/auth/login', data={'username': 'admin', 'password': 'admin123'})
+          assert login_res.status_code == 200, f'Login failed: {login_res.status_code}'
+
+          urls = [
+              '/',
+              '/admin/dashboard',
+              '/admin/users',
+              '/admin/computers',
+              '/admin/technicians',
+              '/admin/import',
+              '/admin/import/template',
+              '/admin/audit',
+          ]
+          for url in urls:
+              res = client.get(url)
+              assert res.status_code == 200, f'GET {url} failed with {res.status_code}'
+          print('E2E Docker smoke test passed successfully!')
+          "
+
+      - name: Stop Docker Compose Services
+        if: always()
+        run: |
+          docker compose down -v

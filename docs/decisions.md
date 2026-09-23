@@ -1,5 +1,12 @@
 # Architectural Decisions & Design Rationale
 
+## Dashboard 500 Hotfix & Postgres Enum Alignment
+
+- Resolved HTTP 500 `DataError` on `/admin/dashboard` in PostgreSQL environments caused by uppercase enum type definition (`PLANNED`, `IN_PROGRESS`, `DONE`, `MISSED`, `CANCELLED`) in initial migration versus lowercase string values (`planned`, `in_progress`, `done`, `missed`, `cancelled`) in Python ORM model.
+- Added Alembic migration `77a8b9c0d1e2_fix_enum_values.py` converting PostgreSQL `maintenanceeventstatus` enum values to match SQLAlchemy ORM string values.
+- Updated `app/main.py` exception handler to issue HTTP 302 redirects to `/auth/login` for unauthenticated HTML requests.
+- Added E2E Docker Compose smoke test in `.github/workflows/ci.yml` verifying live container startup, login, and `/admin/dashboard` 200 response on every push.
+
 ## Reconciliation & Requirement Verification (Step 0 Audit)
 
 An audit was conducted against `docs/requirements.md` §1–§3 and §9 Iteration 1 to ensure full compliance before beginning Iteration 2:
