@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}{{ translate('my_computers', locale) }} - CFMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <h1 class="text-3xl font-bold text-gray-900">{{ translate('my_computers', locale) }}</h1>
+
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        {% if computers %}
+            <div class="space-y-4">
+                {% for computer in computers %}
+                <div class="p-4 border rounded-lg flex justify-between items-center bg-gray-50">
+                    <div>
+                        <div class="font-bold text-lg text-gray-800">{{ computer.hostname }}</div>
+                        <div class="text-sm text-gray-600">IP: {{ computer.ip or '-' }} | OS: {{ computer.os or '-' }} | {{ computer.location or '-' }}</div>
+                    </div>
+                    <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
+                        {{ computer.status }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-gray-500">Компьютеры не найдены.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

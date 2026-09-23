@@ -1,0 +1,16 @@
+[Unit]
+Description=Computer Fleet Maintenance Scheduler (CFMS) Web Service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=cfms
+WorkingDirectory=/opt/cfms
+Environment="DATABASE_URL=postgresql://cfms_user:cfms_password@localhost:5432/cfms_db"
+Environment="SECRET_KEY=cfms-systemd-dev-secret-key-12345678"
+ExecStart=/opt/cfms/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
