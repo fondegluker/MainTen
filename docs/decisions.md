@@ -103,3 +103,23 @@ The repository integrates shell scripts for deployment and local testing:
   - Staged valid rows are held in an in-memory session cache (`IMPORT_STAGING_CACHE`) keyed by a UUID token.
   - Hard errors block confirmation until resolved.
   - `POST /admin/import/confirm`: Commits valid previewed rows to the `computers` table in a single atomic database transaction (`db.begin_nested()`) and records an `excel_import_fleet` entry with raw filename and report details in `audit_log`.
+
+## UI & Documentation Hotfix Resolutions (Issues 1–5)
+
+- **Issue 1 (Monday-First 7-Column Calendar Grid Layout)**:
+  - Created `get_month_calendar_grid()` in `app/services/scheduling_service.py` computing Monday-first 7-column grid structures for any month/year in `[current_year .. current_year + 10]`.
+  - Updated `/admin/calendar` template and router to display 7 weekday headers (`Пн`..`Вс` / `Mon`..`Sun`), leading/trailing blank cells, 10-year year navigation, and accessible high-contrast indicators for working days, weekends, holidays, short days, and today.
+- **Issue 2 (Bulk Calendar Import Documentation & Template Routes)**:
+  - Created `app/importer/calendar_import.py` as single source of truth schema and template generator for bulk calendar imports.
+  - Added template download routes `GET /admin/calendar/import/template.csv` and `GET /admin/calendar/import/template.json` (ADMIN restricted).
+  - Documented full CSV/JSON schemas, allowed values, validation rules, step-by-step instructions, and export notes in `docs/calendar-import-format.md`, and linked from `README.md` and `/admin/calendar` modal UI.
+- **Issue 3 (Localized Date Picker Weekday & Month Names)**:
+  - Created `format_date_localized()` in `app/core/i18n.py` formatting dates with localized weekday abbreviations (`Пн`..`Вс` in `ru` vs `Mon`..`Sun` in `en`).
+  - Updated `get_window_calendar_days` and `user.py` router to format dates according to the user's active locale.
+- **Issue 4 (Prohibit Weekend Selection & Defense-in-Depth Validation)**:
+  - Created `validate_maintenance_date()` in `app/services/scheduling_service.py` enforcing working day checks, future dates, selection window bounds, and technician capacity.
+  - Disabled weekend/invalid dates in both initial date picker and "Изменить дату" reschedule picker with explanation tooltips.
+  - Updated `POST /user/schedule/{computer_id}` to reject invalid/weekend date submissions directly with `HTTP 422 Unprocessable Entity`.
+- **Issue 5 (Left Sidebar Navigation Layout)**:
+  - Refactored `app/templates/base.html` replacing horizontal top navigation with a fixed left sidebar (`aside#sidebar-nav`).
+  - Implemented default collapsed state (`w-16`), desktop hover expansion (`w-64`), 375px mobile viewport drawer overlay with hamburger toggle, and keyboard accessibility (Escape key handler, focus rings, `aria-expanded`, `aria-label`).

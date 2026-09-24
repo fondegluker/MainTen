@@ -35,61 +35,119 @@
     </div>
     {% endif %}
 
-    <!-- Month Navigation -->
-    <div class="bg-white p-4 border border-gray-200 rounded-xl shadow-sm flex items-center justify-between">
+    <!-- Month & Year Navigation -->
+    <div class="bg-white p-4 border border-gray-200 rounded-xl shadow-sm flex items-center justify-between flex-wrap gap-3">
         <a href="/admin/calendar?year={{ prev_year }}&month={{ prev_month }}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium rounded-md transition">&larr; Предыдущий месяц</a>
 
-        <div class="flex items-center gap-2">
-            <span class="text-xl font-bold text-gray-900">{{ month_name }} {{ year }}</span>
+        <div class="flex items-center gap-3">
+            <span class="text-xl font-bold text-gray-900">{{ month_name }}</span>
+            <select onchange="window.location.href='/admin/calendar?month={{ month }}&year=' + this.value" class="text-xl font-bold text-gray-900 border border-gray-300 rounded-md px-2 py-1 bg-white focus:ring-2 focus:ring-indigo-500">
+                {% for y in range(min_year, max_year + 1) %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
         </div>
 
         <a href="/admin/calendar?year={{ next_year }}&month={{ next_month }}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium rounded-md transition">Следующий месяц &rarr;</a>
     </div>
 
-    <!-- Calendar Month Days Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {% for day in month_days %}
-        {% set kind_val = day.kind.value if day.kind.value else day.kind %}
-        <div class="p-4 border rounded-xl shadow-sm flex flex-col justify-between space-y-2
-                    {% if kind_val == 'holiday' %}bg-red-50 border-red-200
-                    {% elif kind_val == 'weekend' %}bg-amber-50 border-amber-200
-                    {% elif kind_val == 'short_day' %}bg-blue-50 border-blue-200
-                    {% else %}bg-white border-gray-200{% endif %}">
-            <div class="flex items-center justify-between">
-                <span class="text-lg font-bold text-gray-900">{{ day.date.strftime('%d.%m.%Y') }}</span>
-                <span class="text-xs font-semibold px-2 py-0.5 rounded
-                             {% if kind_val == 'holiday' %}bg-red-100 text-red-800
-                             {% elif kind_val == 'weekend' %}bg-amber-100 text-amber-800
-                             {% elif kind_val == 'short_day' %}bg-blue-100 text-blue-800
-                             {% else %}bg-green-100 text-green-800{% endif %}">
-                    {{ kind_val }}
-                </span>
-            </div>
-
-            {% if day.description %}
-                <p class="text-xs text-gray-600 italic">{{ day.description }}</p>
-            {% endif %}
-
-            <div class="pt-2 border-t flex justify-between items-center text-xs">
-                <form action="/admin/calendar/toggle" method="POST" class="inline">
-                    <input type="hidden" name="date" value="{{ day.date.isoformat() }}">
-                    <button type="submit" class="font-semibold text-indigo-600 hover:underline">
-                        Переключить ({{ 'Рабочий' if day.is_working else 'Выходной' }})
-                    </button>
-                </form>
-            </div>
+    <!-- Calendar 7-Column Grid -->
+    <div class="bg-white p-4 border border-gray-200 rounded-xl shadow-sm space-y-3">
+        <!-- Weekday Headers (Monday to Sunday) -->
+        <div class="grid grid-cols-7 gap-2 text-center font-bold text-gray-700 text-sm border-b pb-2">
+            {% for w_name in weekday_names %}
+            <div class="py-1 uppercase tracking-wider">{{ w_name }}</div>
+            {% endfor %}
         </div>
-        {% endfor %}
+
+        <!-- Weeks -->
+        <div class="space-y-2">
+            {% for week in weeks %}
+            <div class="grid grid-cols-7 gap-2">
+                {% for cell in week %}
+                {% if cell is none %}
+                <!-- Blank cell -->
+                <div class="p-2 bg-gray-50/50 border border-dashed border-gray-200 rounded-lg opacity-40 min-h-[100px] flex items-center justify-center">
+                    <span class="text-xs text-gray-300">&mdash;</span>
+                </div>
+                {% else %}
+                <!-- Day cell -->
+                <div class="p-2.5 border rounded-lg shadow-xs flex flex-col justify-between min-h-[100px] relative transition-all
+                            {% if cell.is_today %} ring-2 ring-indigo-600 ring-offset-1 font-bold {% endif %}
+                            {% if cell.kind == 'holiday' %} bg-red-50 border-red-300 border-l-4 border-l-red-600
+                            {% elif cell.kind == 'weekend' %} bg-amber-50 border-amber-300 border-l-4 border-l-amber-500
+                            {% elif cell.kind == 'short_day' %} bg-blue-50 border-blue-300 border-l-4 border-l-blue-600
+                            {% else %} bg-white border-gray-200 border-l-4 border-l-emerald-500 {% endif %}">
+                    <div>
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-base font-bold text-gray-900">{{ cell.day_number }}</span>
+                            {% if cell.is_today %}
+                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-600 text-white">Сегодня</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="mt-1">
+                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded inline-block uppercase tracking-wider
+                                         {% if cell.kind == 'holiday' %} bg-red-100 text-red-800
+                                         {% elif cell.kind == 'weekend' %} bg-amber-100 text-amber-800
+                                         {% elif cell.kind == 'short_day' %} bg-blue-100 text-blue-800
+                                         {% else %} bg-emerald-100 text-emerald-800 {% endif %}">
+                                {% if cell.kind == 'holiday' %}Праздник
+                                {% elif cell.kind == 'weekend' %}Выходной
+                                {% elif cell.kind == 'short_day' %}Сокращенный
+                                {% else %}Рабочий{% endif %}
+                            </span>
+                        </div>
+
+                        {% if cell.description %}
+                        <p class="text-[11px] text-gray-600 italic mt-1 line-clamp-2" title="{{ cell.description }}">{{ cell.description }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="pt-1.5 border-t border-gray-200/60 flex justify-between items-center text-[11px] mt-1">
+                        <form action="/admin/calendar/toggle" method="POST" class="inline w-full">
+                            <input type="hidden" name="date" value="{{ cell.date.isoformat() }}">
+                            <button type="submit" class="w-full text-left font-semibold text-indigo-600 hover:underline">
+                                {{ 'В рабочий' if not cell.is_working else 'В выходной' }}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
     </div>
 
     <!-- Bulk Import Modal -->
     <div id="import-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-xl shadow-lg p-6 max-w-md w-full space-y-4">
-            <h3 class="text-xl font-bold text-gray-900">Массовый импорт календаря</h3>
-            <form action="/admin/calendar/bulk-import" method="POST" enctype="multipart/form-data" class="space-y-4">
+        <div class="bg-white rounded-xl shadow-lg p-6 max-w-lg w-full space-y-4">
+            <h3 class="text-xl font-bold text-gray-900">Массовый импорт календаря / Bulk Calendar Import</h3>
+
+            <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 space-y-1">
+                <p class="font-semibold">Формат колонок / Field Specification:</p>
+                <p>• <code class="font-mono bg-white px-1 border rounded">date</code> (обязательно): YYYY-MM-DD (напр. 2025-05-09)</p>
+                <p>• <code class="font-mono bg-white px-1 border rounded">kind</code> (обязательно): <code class="font-mono">workday</code> | <code class="font-mono">weekend</code> | <code class="font-mono">holiday</code> | <code class="font-mono">short_day</code></p>
+                <p>• <code class="font-mono bg-white px-1 border rounded">is_working</code> (опционально): <code class="font-mono">true</code> | <code class="font-mono">false</code></p>
+                <p>• <code class="font-mono bg-white px-1 border rounded">description</code> (опционально): Описание / Название события</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+                <a href="/admin/calendar/import/template.csv" download class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-indigo-700 text-xs font-semibold rounded-md border border-gray-300 flex items-center gap-1 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Скачать шаблон CSV
+                </a>
+                <a href="/admin/calendar/import/template.json" download class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-indigo-700 text-xs font-semibold rounded-md border border-gray-300 flex items-center gap-1 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Скачать шаблон JSON
+                </a>
+            </div>
+
+            <form action="/admin/calendar/bulk-import" method="POST" enctype="multipart/form-data" class="space-y-4 pt-2">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Файл CSV или JSON</label>
-                    <input type="file" name="file" accept=".csv, .json" required class="block w-full text-sm text-gray-500">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Файл CSV или JSON (UTF-8)</label>
+                    <input type="file" name="file" accept=".csv, .json" required class="block w-full text-sm text-gray-500 border border-gray-300 rounded-lg p-2">
                 </div>
                 <div class="flex justify-end space-x-3 pt-2">
                     <button type="button" onclick="document.getElementById('import-modal').classList.add('hidden')"

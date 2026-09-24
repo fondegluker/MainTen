@@ -1,5 +1,6 @@
 """Scheduling engine service for CFMS (Iteration 4)."""
 
+import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -94,10 +95,12 @@ def compute_window_bounds(trigger_date: date, db: Session) -> tuple[date, date, 
     return window_start, window_end, prompt_start_date
 
 
-def get_window_calendar_days(computer_id: int, db: Session, today: date | None = None) -> dict[str, Any]:
+def get_window_calendar_days(computer_id: int, db: Session, today: date | None = None, locale: str = "ru") -> dict[str, Any]:
     """Get all calendar days in selection window centered on trigger_date with selection state."""
     if today is None:
         today = datetime.now(timezone.utc).date()
+
+    from app.core.i18n import format_date_localized
 
     computer = db.query(Computer).filter(Computer.id == computer_id).first()
     if not computer:
@@ -175,7 +178,7 @@ def get_window_calendar_days(computer_id: int, db: Session, today: date | None =
             {
                 "date": curr_d,
                 "date_str": curr_d.isoformat(),
-                "formatted": curr_d.strftime("%d.%m.%Y (%a)"),
+                "formatted": format_date_localized(curr_d, locale=locale),
                 "is_selectable": is_selectable,
                 "disabled_reason": disabled_reason,
             }
@@ -336,6 +339,76 @@ def get_available_dates(
     return available_dates
 
 
+def validate_maintenance_date(
+    computer_id: int, target_date: date, db: Session, today: date | None = None
+) -> tuple[bool, str | None]:
+    """Validate if target_date can be scheduled for computer_id according to business rules."""
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+
+    if target_date <= today:
+        return False, "Выберите будущую дату"
+
+    if not is_working_day(target_date, db):
+        return False, "Выбранный день является выходным или праздничным"
+
+    computer = db.query(Computer).filter(Computer.id == computer_id).first()
+    if not computer:
+        return False, "Компьютер не найден"
+
+    if not computer.next_maintenance_due_at:
+        computer.next_maintenance_due_at = compute_next_maintenance_due_at(computer, db)
+        db.add(computer)
+        db.commit()
+
+    trigger_date = (
+        computer.next_maintenance_due_at.date()
+        if isinstance(computer.next_maintenance_due_at, datetime)
+        else computer.next_maintenance_due_at
+    )
+
+    window_start, window_end, _ = compute_window_bounds(trigger_date, db)
+    if target_date < window_start or target_date > window_end:
+        return False, "Дата находится за пределами допустимого окна выбора"
+
+    # Check if same computer is booked on target_date
+    existing_comp_event = (
+        db.query(MaintenanceEvent)
+        .filter(
+            MaintenanceEvent.computer_id == computer_id,
+            MaintenanceEvent.scheduled_date == target_date,
+            MaintenanceEvent.status.in_([MaintenanceEventStatus.PLANNED, MaintenanceEventStatus.IN_PROGRESS]),
+        )
+        .first()
+    )
+    if existing_comp_event:
+        return False, "Эта дата уже забронирована для данного компьютера"
+
+    # Check technician capacity
+    technicians = db.query(User).filter(User.role == UserRole.TECHNICIAN, User.is_active == True).all()
+    if not technicians:
+        return False, "Нет активных техников"
+
+    capacity_per_tech = int(get_setting_value(db, "technician_daily_capacity", 1))
+
+    assigned_events = (
+        db.query(MaintenanceEvent.technician_id, func.count(MaintenanceEvent.id).label("event_count"))
+        .filter(
+            MaintenanceEvent.scheduled_date == target_date,
+            MaintenanceEvent.status.in_([MaintenanceEventStatus.PLANNED, MaintenanceEventStatus.IN_PROGRESS]),
+        )
+        .group_by(MaintenanceEvent.technician_id)
+        .all()
+    )
+    tech_load = {tech_id: count for tech_id, count in assigned_events}
+    has_capacity = any(tech_load.get(tech.id, 0) < capacity_per_tech for tech in technicians)
+
+    if not has_capacity:
+        return False, "На выбранную дату нет свободных техников"
+
+    return True, None
+
+
 def schedule_maintenance(computer_id: int, selected_date: date, user_id: int, db: Session) -> MaintenanceEvent:
     """Schedule a maintenance event for computer on selected_date, assigning an available technician."""
     computer = db.query(Computer).filter(Computer.id == computer_id).first()
@@ -471,3 +544,95 @@ def process_unselected_windows(db: Session, today: date | None = None) -> int:
 
     db.commit()
     return shifted_count
+
+
+def get_month_calendar_grid(year: int, month: int, db: Session, current_date: date | None = None) -> dict[str, Any]:
+    """Calculate Monday-first 7-column calendar grid for a given year/month bounded to current_year .. current_year + 10."""
+    if current_date is None:
+        current_date = datetime.now(timezone.utc).date()
+
+    curr_year = current_date.year
+    min_year = curr_year
+    max_year = curr_year + 10
+
+    if year < min_year:
+        year = min_year
+    elif year > max_year:
+        year = max_year
+
+    if not (1 <= month <= 12):
+        month = current_date.month
+
+    first_day = date(year, month, 1)
+    _, num_days = calendar.monthrange(year, month)
+
+    # Monday = 0, Tuesday = 1, ..., Sunday = 6
+    leading_blanks = first_day.weekday()
+
+    start_d = date(year, month, 1)
+    end_d = date(year, month, num_days)
+    entries = db.query(WorkingCalendar).filter(
+        WorkingCalendar.date >= start_d, WorkingCalendar.date <= end_d
+    ).all()
+    entry_map = {e.date: e for e in entries}
+
+    days_cells = []
+    for _ in range(leading_blanks):
+        days_cells.append(None)
+
+    for d in range(1, num_days + 1):
+        c_date = date(year, month, d)
+        entry = entry_map.get(c_date)
+        if not entry:
+            is_w = c_date.weekday() < 5
+            k = DayKind.WORKDAY if is_w else DayKind.WEEKEND
+            entry = WorkingCalendar(date=c_date, is_working=is_w, kind=k, description="", source="seed")
+
+        kind_val = entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
+        days_cells.append({
+            "date": c_date,
+            "day_number": d,
+            "entry": entry,
+            "kind": kind_val,
+            "is_working": entry.is_working,
+            "description": entry.description or "",
+            "is_today": (c_date == current_date),
+            "is_weekend": (c_date.weekday() >= 5),
+        })
+
+    total_cells = len(days_cells)
+    remainder = total_cells % 7
+    trailing_blanks = (7 - remainder) % 7
+    for _ in range(trailing_blanks):
+        days_cells.append(None)
+
+    weeks = [days_cells[i : i + 7] for i in range(0, len(days_cells), 7)]
+
+    if month == 1:
+        prev_month = 12
+        prev_year = year - 1 if year > min_year else min_year
+    else:
+        prev_month = month - 1
+        prev_year = year
+
+    if month == 12:
+        next_month = 1
+        next_year = year + 1 if year < max_year else max_year
+    else:
+        next_month = month + 1
+        next_year = year
+
+    return {
+        "year": year,
+        "month": month,
+        "weeks": weeks,
+        "prev_year": prev_year,
+        "prev_month": prev_month,
+        "next_year": next_year,
+        "next_month": next_month,
+        "min_year": min_year,
+        "max_year": max_year,
+        "leading_blanks": leading_blanks,
+        "num_days": num_days,
+        "trailing_blanks": trailing_blanks,
+    }

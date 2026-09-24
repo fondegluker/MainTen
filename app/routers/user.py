@@ -2,13 +2,14 @@
 
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, Form, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.core.database import get_db
+from app.core.i18n import get_locale
 from app.models.models import Computer, MaintenanceEvent, MaintenanceEventStatus, User, UserRole
 from app.routers.web import context_with_defaults
 from app.services.scheduling_service import (
@@ -17,6 +18,7 @@ from app.services.scheduling_service import (
     get_available_dates,
     get_window_calendar_days,
     schedule_maintenance,
+    validate_maintenance_date,
 )
 
 router = APIRouter(prefix="/user", tags=["user"])
@@ -67,7 +69,8 @@ def user_computers_page(
             .first()
         )
 
-        window_calendar = get_window_calendar_days(comp.id, db, today=today)
+        active_locale = get_locale(request, current_user.locale)
+        window_calendar = get_window_calendar_days(comp.id, db, today=today, locale=active_locale)
 
         # Get past maintenance events with details
         past_events = (
@@ -212,23 +215,25 @@ def submit_schedule_date(
     """Submit selected maintenance date for computer."""
     computer = db.query(Computer).filter(Computer.id == computer_id).first()
     if not computer:
-        return RedirectResponse(url="/user/my-computers?error=Компьютер+не+найден", status_code=status.HTTP_302_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Компьютер не найден")
 
     if current_user.role != UserRole.ADMIN and computer.owner_user_id != current_user.id:
-        return RedirectResponse(url="/user/my-computers?error=Доступ+запрещен", status_code=status.HTTP_302_FOUND)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещен")
 
     try:
-        selected_date = date.fromisoformat(scheduled_date_str)
-        today = datetime.now(timezone.utc).date()
-        if selected_date <= today:
-            return RedirectResponse(
-                url="/user/my-computers?error=Выберите+будущую+дату", status_code=status.HTTP_302_FOUND
-            )
+        selected_date = date.fromisoformat(scheduled_date_str.strip())
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Некорректный формат даты")
 
+    is_valid, err_msg = validate_maintenance_date(computer.id, selected_date, db)
+    if not is_valid:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=err_msg)
+
+    try:
         schedule_maintenance(computer.id, selected_date, current_user.id, db)
         return RedirectResponse(
             url="/user/my-computers?message=Дата+технического+обслуживания+успешно+запланирована",
             status_code=status.HTTP_302_FOUND,
         )
     except ValueError as exc:
-        return RedirectResponse(url=f"/user/my-computers?error={exc}", status_code=status.HTTP_302_FOUND)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))

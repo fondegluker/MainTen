@@ -61,6 +61,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "confirm_import": "Подтвердить импорт",
         "import_success": "Импорт успешно завершен",
         "last_maintenance": "Дата последнего обслуживания",
+        "select_maintenance_date": "Выберите дату технического обслуживания (ТО)",
+        "due_by": "Срок до",
+        "chosen_maintenance_date": "Выбранная дата технического обслуживания:",
+        "change_date": "Изменить дату",
+        "select_new_date": "Выберите новую дату обслуживания:",
+        "save_new_date": "Сохранить новую дату",
+        "select_this_date": "Выбрать эту дату",
+        "available_working_day": "Свободный рабочий день",
+        "no_available_dates": "К сожалению, нет доступных свободных рабочих дней в окне выбора. Обратитесь к администратору.",
+        "window_opens_on": "Окно выбора откроется",
+        "my_computer_info": "Информация о моём компьютере",
+        "today": "Сегодня",
     },
     "en": {
         "app_title": "Computer Fleet Maintenance Scheduler",
@@ -122,8 +134,54 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "confirm_import": "Confirm Import",
         "import_success": "Import completed successfully",
         "last_maintenance": "Last maintenance",
+        "select_maintenance_date": "Select maintenance date",
+        "due_by": "Due by",
+        "chosen_maintenance_date": "Scheduled maintenance date:",
+        "change_date": "Change Date",
+        "select_new_date": "Select a new maintenance date:",
+        "save_new_date": "Save New Date",
+        "select_this_date": "Select This Date",
+        "available_working_day": "Available working day",
+        "no_available_dates": "No available working dates in the selection window. Please contact an administrator.",
+        "window_opens_on": "Selection window will open on",
+        "my_computer_info": "My Computer Details",
+        "today": "Today",
     },
 }
+
+from datetime import date
+
+WEEKDAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+WEEKDAYS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+MONTHS_RU = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря"
+]
+MONTHS_EN = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+]
+
+
+def format_date_localized(d: date | str, locale: str = "ru", include_weekday: bool = True) -> str:
+    """Format date localized according to app locale (ru or en)."""
+    if isinstance(d, str):
+        try:
+            d = date.fromisoformat(d.strip())
+        except ValueError:
+            return d
+
+    if not isinstance(d, date):
+        return str(d)
+
+    date_str = d.strftime("%d.%m.%Y")
+    if not include_weekday:
+        return date_str
+
+    w_idx = d.weekday()  # 0 = Monday, 6 = Sunday
+    w_names = WEEKDAYS_EN if locale == "en" else WEEKDAYS_RU
+    return f"{date_str} ({w_names[w_idx]})"
 
 
 def get_locale(request: Request | None = None, user_locale: str | None = None) -> str:

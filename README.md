@@ -43,13 +43,12 @@ The project includes shell scripts for Docker setup and environment management:
 
 ---
 
-## Fleet Import
+## Fleet & Calendar Import
 
-CFMS supports importing computer inventory from Excel (`.xlsx`) spreadsheets:
+CFMS supports importing computer inventory from Excel (`.xlsx`) spreadsheets and calendar schedules via CSV/JSON:
 
-- **Download Template Route:** `GET /admin/import/template` (ADMIN role required)
-- **Canonical Asset Path:** `app/importer/assets/fleet_import_template.xlsx`
-- **Detailed Specification:** See [`docs/fleet-import-format.md`](docs/fleet-import-format.md) for full column contracts, data validation rules, duplicate handling, and boolean/date formats.
+- **Fleet Import Specification:** See [`docs/fleet-import-format.md`](docs/fleet-import-format.md) for Excel `.xlsx` column contracts and rules.
+- **Calendar Import Specification:** See [`docs/calendar-import-format.md`](docs/calendar-import-format.md) for CSV and JSON bulk calendar import rules, schemas, and template routes (`GET /admin/calendar/import/template.csv`, `.json`).
 
 ---
 

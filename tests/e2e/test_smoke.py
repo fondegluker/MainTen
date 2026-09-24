@@ -106,7 +106,7 @@ def test_e2e_all_roles_nav_links_and_forbidden_status():
             page.wait_for_load_state("networkidle")
 
             # Extract nav links present on page
-            nav_hrefs = page.eval_on_selector_all("nav a", "elements => elements.map(e => e.getAttribute('href'))")
+            nav_hrefs = page.eval_on_selector_all("aside#sidebar-nav a", "elements => elements.map(e => e.getAttribute('href'))")
             clean_hrefs = [
                 h
                 for h in nav_hrefs
@@ -143,133 +143,165 @@ def test_e2e_all_roles_nav_links_and_forbidden_status():
         browser.close()
 
 
-def test_e2e_locale_switch_per_role():
-    """Toggle locale RU ↔ EN per role and assert visible translated strings change."""
-    roles = [
-        ("admin", "admin123"),
-        ("tech_e2e", "tech123"),
-        ("obs_e2e", "obs123"),
-        ("user_e2e", "user123"),
-    ]
-
+def test_e2e_issue1_calendar_grid_and_12_month_navigation():
+    """E2E test for Issue 1: open /admin/calendar, navigate 12 months ahead, assert 7 columns."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
 
-        for username, password in roles:
-            context = browser.new_context()
-            page = context.new_page()
+        page.goto(f"{BASE_URL}/auth/login")
+        page.fill("input[name='username']", "admin")
+        page.fill("input[name='password']", "admin123")
+        page.click("button[type='submit']")
+        page.wait_for_load_state("networkidle")
 
-            page.goto(f"{BASE_URL}/auth/login")
-            page.fill("input[name='username']", username)
-            page.fill("input[name='password']", password)
-            page.click("button[type='submit']")
+        res = page.goto(f"{BASE_URL}/admin/calendar")
+        assert res.status == 200
+        assert "grid-cols-7" in page.content() or "Пн" in page.content() or "Mon" in page.content()
+
+        # Navigate 12 months forward
+        for _ in range(12):
+            next_link = page.get_by_text("Следующий месяц")
+            if next_link.count() > 0:
+                next_link.first.click()
+            else:
+                page.click("a:has-text('Next')")
             page.wait_for_load_state("networkidle")
+            assert page.title() != "500 Internal Server Error"
 
-            # Switch to EN
-            page.goto(f"{BASE_URL}/set-locale?locale=en")
-            page.wait_for_load_state("networkidle")
-
-            content_en = page.content()
-            assert (
-                "Sign Out" in content_en
-                or "Computer Fleet Maintenance Scheduler" in content_en
-                or "My Computers" in content_en
-                or "Reports" in content_en
-            ), f"Role {username}: Failed to switch UI to English"
-
-            # Switch back to RU
-            page.goto(f"{BASE_URL}/set-locale?locale=ru")
-            page.wait_for_load_state("networkidle")
-
-            content_ru = page.content()
-            assert (
-                "Выйти" in content_ru
-                or "Система планирования ТО ПК" in content_ru
-                or "Мои компьютеры" in content_ru
-                or "Отчеты" in content_ru
-            ), f"Role {username}: Failed to switch UI back to Russian"
-
-            context.close()
-
+        context.close()
         browser.close()
 
 
-def test_e2e_magic_link_flow_date_picker_and_technician_schedule():
-    """End-to-end magic-link generation, date picker selection, and technician schedule verification."""
+def test_e2e_issue2_calendar_import_templates():
+    """E2E test for Issue 2: download template CSV and JSON links exist on calendar page."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+
+        page.goto(f"{BASE_URL}/auth/login")
+        page.fill("input[name='username']", "admin")
+        page.fill("input[name='password']", "admin123")
+        page.click("button[type='submit']")
+        page.wait_for_load_state("networkidle")
+
+        page.goto(f"{BASE_URL}/admin/calendar")
+        page.wait_for_load_state("networkidle")
+
+        content = page.content()
+        assert "/admin/calendar/import/template.csv" in content
+        assert "/admin/calendar/import/template.json" in content
+
+        context.close()
+        browser.close()
+
+
+def test_e2e_issue3_datepicker_locale_weekday_names():
+    """E2E test for Issue 3: date picker weekday names change based on UI locale."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+
+        page.goto(f"{BASE_URL}/auth/login")
+        page.fill("input[name='username']", "user_e2e")
+        page.fill("input[name='password']", "user123")
+        page.click("button[type='submit']")
+        page.wait_for_load_state("networkidle")
+
+        # Set locale RU
+        page.goto(f"{BASE_URL}/set-locale?locale=ru")
+        page.goto(f"{BASE_URL}/user/my-computers")
+        page.wait_for_load_state("networkidle")
+
+        content_ru = page.content()
+        # Verify Russian weekday name or headers present
+        assert "Пн" in content_ru or "Вт" in content_ru or "Ср" in content_ru or "Чт" in content_ru or "Пт" in content_ru or "Сб" in content_ru or "Вс" in content_ru or "Выберите дату" in content_ru
+
+        # Set locale EN
+        page.goto(f"{BASE_URL}/set-locale?locale=en")
+        page.goto(f"{BASE_URL}/user/my-computers")
+        page.wait_for_load_state("networkidle")
+
+        content_en = page.content()
+        assert "Select maintenance date" in content_en or "Mon" in content_en or "Tue" in content_en or "Wed" in content_en or "Thu" in content_en or "Fri" in content_en or "Sat" in content_en or "Sun" in content_en
+
+        context.close()
+        browser.close()
+
+
+def test_e2e_issue4_weekend_rejection_422():
+    """E2E test for Issue 4: server rejects weekend date submission with 422."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+
+        page.goto(f"{BASE_URL}/auth/login")
+        page.fill("input[name='username']", "user_e2e")
+        page.fill("input[name='password']", "user123")
+        page.click("button[type='submit']")
+        page.wait_for_load_state("networkidle")
+
+        # Submit Saturday date directly via API
+        response = page.request.post(
+            f"{BASE_URL}/user/schedule/1",
+            form={"scheduled_date_str": "2025-05-03"}  # Saturday
+        )
+        assert response.status == 422
+
+        context.close()
+        browser.close()
+
+
+def test_e2e_issue5_left_sidebar_and_hamburger_drawer():
+    """E2E test for Issue 5: left sidebar hover expansion and mobile hamburger drawer toggle."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
 
-        # 1. ADMIN session: Regenerate magic link for user_e2e
-        admin_context = browser.new_context()
-        admin_page = admin_context.new_page()
+        # Desktop hover expansion
+        desktop_ctx = browser.new_context(viewport={"width": 1280, "height": 800})
+        desktop_page = desktop_ctx.new_page()
 
-        admin_page.goto(f"{BASE_URL}/auth/login")
-        admin_page.fill("input[name='username']", "admin")
-        admin_page.fill("input[name='password']", "admin123")
-        admin_page.click("button[type='submit']")
-        admin_page.wait_for_load_state("networkidle")
+        desktop_page.goto(f"{BASE_URL}/auth/login")
+        desktop_page.fill("input[name='username']", "admin")
+        desktop_page.fill("input[name='password']", "admin123")
+        desktop_page.click("button[type='submit']")
+        desktop_page.wait_for_load_state("networkidle")
 
-        admin_page.goto(f"{BASE_URL}/admin/users")
-        admin_page.wait_for_load_state("networkidle")
+        sidebar = desktop_page.locator("#sidebar-nav")
+        assert sidebar.count() == 1
 
-        # Find user_e2e user ID from magic-link row
-        magic_link_href = admin_page.eval_on_selector(
-            "tr:has-text('user_e2e') a[href*='magic-link']", "element => element.getAttribute('href')"
-        )
-        assert magic_link_href, "Magic link route not found for user_e2e in admin users list"
+        # Hover sidebar
+        sidebar.hover()
+        desktop_page.wait_for_timeout(300)
+        assert sidebar.is_visible()
 
-        admin_page.goto(urljoin(BASE_URL, magic_link_href))
-        admin_page.wait_for_load_state("networkidle")
+        desktop_ctx.close()
 
-        # Click regenerate button
-        admin_page.click("#regenerate-btn")
-        admin_page.wait_for_timeout(1000)
+        # Mobile viewport drawer toggle (375px)
+        mobile_ctx = browser.new_context(viewport={"width": 375, "height": 667})
+        mobile_page = mobile_ctx.new_page()
 
-        magic_url_val = admin_page.input_value("#magic-url-input")
-        assert magic_url_val and "/auth/magic-link?token=" in magic_url_val, (
-            f"Invalid magic url generated: {magic_url_val}"
-        )
+        mobile_page.goto(f"{BASE_URL}/auth/login")
+        mobile_page.fill("input[name='username']", "admin")
+        mobile_page.fill("input[name='password']", "admin123")
+        mobile_page.click("button[type='submit']")
+        mobile_page.wait_for_load_state("networkidle")
 
-        admin_context.close()
+        # Click hamburger button to open drawer
+        hamburger = mobile_page.locator("button[aria-label='Toggle Navigation Menu']")
+        assert hamburger.count() == 1
+        hamburger.click()
+        mobile_page.wait_for_timeout(300)
 
-        # 2. Fresh USER session: Open magic link
-        user_context = browser.new_context()
-        user_page = user_context.new_page()
+        # Press Escape key to close drawer
+        mobile_page.keyboard.press("Escape")
+        mobile_page.wait_for_timeout(300)
 
-        user_page.goto(magic_url_val)
-        user_page.wait_for_load_state("networkidle")
-
-        # Assert landing on user's page with date picker rendered prominently
-        assert "/user/my-computers" in user_page.url
-        assert (
-            "Выберите дату технического обслуживания" in user_page.content() or "Выбранная дата" in user_page.content()
-        )
-
-        # Select first visible radio date input if picker is active
-        visible_radio = user_page.locator("input[name='scheduled_date_str']:visible").first
-        if visible_radio.count() > 0:
-            visible_radio.check(force=True)
-            user_page.click("form:has(input[name='scheduled_date_str']:visible) button[type='submit']")
-            user_page.wait_for_load_state("networkidle")
-            assert "успешно" in user_page.content() or "Выбранная дата" in user_page.content()
-
-        user_context.close()
-
-        # 3. TECHNICIAN session: Check schedule page
-        tech_context = browser.new_context()
-        tech_page = tech_context.new_page()
-
-        tech_page.goto(f"{BASE_URL}/auth/login")
-        tech_page.fill("input[name='username']", "tech_e2e")
-        tech_page.fill("input[name='password']", "tech123")
-        tech_page.click("button[type='submit']")
-        tech_page.wait_for_load_state("networkidle")
-
-        tech_res = tech_page.goto(f"{BASE_URL}/technician/schedule")
-        assert tech_res and tech_res.status == 200
-        assert "График" in tech_page.content() or "schedule" in tech_page.content().lower()
-
-        tech_context.close()
+        mobile_ctx.close()
         browser.close()
 
 

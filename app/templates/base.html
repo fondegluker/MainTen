@@ -12,70 +12,142 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800 flex flex-col font-sans">
-    <!-- Navbar -->
-    <nav class="bg-slate-800 text-white shadow-md">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="font-bold text-xl flex items-center gap-2">
-                        <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                        </svg>
-                        <span>CFMS</span>
-                    </a>
-                    {% if current_user %}
-                        {% if current_user.role.value == "ADMIN" %}
-                            <a href="/admin/dashboard" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('admin_dashboard', locale) }}</a>
-                            <a href="/admin/users" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('users_management', locale) }}</a>
-                            <a href="/admin/computers" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('computers_management', locale) }}</a>
-                            <a href="/admin/technicians" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('technicians_management', locale) }}</a>
-                            <a href="/admin/import" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('import_fleet', locale) }}</a>
-                            <a href="/admin/protocol" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Протокол ТО</a>
-                            <a href="/admin/calendar" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Календарь</a>
-                            <a href="/admin/settings" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('settings', locale) }}</a>
-                        {% endif %}
-                        {% if current_user.role.value in ["ADMIN", "TECHNICIAN"] %}
-                            <a href="/technician/schedule" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('technician_schedule', locale) }}</a>
-                        {% endif %}
-                        {% if current_user.role.value in ["ADMIN", "OBSERVER", "TECHNICIAN"] %}
-                            <a href="/reports" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('reports', locale) }}</a>
-                        {% endif %}
-                        <a href="/user/my-computers" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('my_computers', locale) }}</a>
-                    {% endif %}
-                </div>
 
-                <div class="flex items-center space-x-4">
-                    <!-- Language Switcher -->
-                    <div class="flex items-center space-x-2 text-sm bg-slate-700 px-3 py-1 rounded-md">
-                        <a href="/set-locale?locale=ru" class="{% if locale == 'ru' %}text-indigo-300 font-bold underline{% else %}text-gray-300 hover:text-white{% endif %}">RU</a>
-                        <span class="text-gray-400">|</span>
-                        <a href="/set-locale?locale=en" class="{% if locale == 'en' %}text-indigo-300 font-bold underline{% else %}text-gray-300 hover:text-white{% endif %}">EN</a>
-                    </div>
+    <div x-data="{ open: false, isHovered: false }" @keydown.escape.window="open = false" class="relative">
+        <!-- Top Bar Header -->
+        <header class="bg-slate-800 text-white shadow-md h-16 fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4 sm:px-6">
+            <div class="flex items-center space-x-3">
+                <!-- Mobile Hamburger Toggle Button -->
+                <button @click="open = !open"
+                        :aria-expanded="open"
+                        aria-label="Toggle Navigation Menu"
+                        class="p-2 rounded-md hover:bg-slate-700 text-gray-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 md:hidden">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path x-show="!open" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                        <path x-show="open" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
 
-                    {% if current_user %}
-                        <div class="text-sm text-gray-300 flex items-center gap-2">
-                            <span class="font-medium text-white">{{ current_user.username }}</span>
-                            <span class="text-xs bg-slate-600 px-2 py-0.5 rounded text-indigo-200">{{ current_user.role.value }}</span>
-                        </div>
-                        <a href="/auth/logout" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition">{{ translate('logout', locale) }}</a>
-                    {% else %}
-                        <a href="/auth/login" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition">{{ translate('login', locale) }}</a>
-                    {% endif %}
-                </div>
+                <!-- Brand Logo -->
+                <a href="/" class="font-bold text-xl flex items-center gap-2 text-white">
+                    <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                    <span>CFMS</span>
+                </a>
             </div>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {% block content %}{% endblock %}
-    </main>
+            <!-- Right Header Items: Language Switcher & User Account -->
+            <div class="flex items-center space-x-4">
+                <!-- Language Switcher -->
+                <div class="flex items-center space-x-2 text-sm bg-slate-700 px-3 py-1 rounded-md">
+                    <a href="/set-locale?locale=ru" class="{% if locale == 'ru' %}text-indigo-300 font-bold underline{% else %}text-gray-300 hover:text-white{% endif %}">RU</a>
+                    <span class="text-gray-400">|</span>
+                    <a href="/set-locale?locale=en" class="{% if locale == 'en' %}text-indigo-300 font-bold underline{% else %}text-gray-300 hover:text-white{% endif %}">EN</a>
+                </div>
 
-    <!-- Footer -->
-    <footer class="bg-slate-800 text-gray-400 text-sm py-4 border-t border-slate-700">
-        <div class="max-w-7xl mx-auto px-4 text-center">
-            &copy; 2025 CFMS - {{ translate('app_title', locale) }}
+                {% if current_user %}
+                    <div class="text-sm text-gray-300 hidden sm:flex items-center gap-2">
+                        <span class="font-medium text-white">{{ current_user.username }}</span>
+                        <span class="text-xs bg-slate-600 px-2 py-0.5 rounded text-indigo-200">{{ current_user.role.value }}</span>
+                    </div>
+                    <a href="/auth/logout" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition">{{ translate('logout', locale) }}</a>
+                {% else %}
+                    <a href="/auth/login" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition">{{ translate('login', locale) }}</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <!-- Backdrop for Mobile Drawer -->
+        <div x-show="open" @click="open = false" x-transition.opacity class="fixed inset-0 bg-black/50 z-30 md:hidden"></div>
+
+        <!-- Left Sidebar Navigation -->
+        <aside id="sidebar-nav"
+               @mouseenter="isHovered = true"
+               @mouseleave="isHovered = false"
+               :class="{
+                   'translate-x-0': open,
+                   '-translate-x-full md:translate-x-0': !open,
+                   'w-64': isHovered || open,
+                   'w-16': !isHovered && !open
+               }"
+               :aria-expanded="isHovered || open"
+               aria-label="Navigation Sidebar"
+               class="fixed left-0 top-16 bottom-0 z-40 bg-slate-800 text-white shadow-xl transition-all duration-300 ease-in-out flex flex-col group overflow-x-hidden border-r border-slate-700">
+
+            <nav class="flex-grow py-4 px-2 space-y-1.5 overflow-y-auto">
+                {% if current_user %}
+                    {% if current_user.role.value == "ADMIN" %}
+                        <!-- Admin Links -->
+                        <a href="/admin/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">{{ translate('admin_dashboard', locale) }}</span>
+                        </a>
+                        <a href="/admin/users" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">{{ translate('users_management', locale) }}</span>
+                        </a>
+                        <a href="/admin/computers" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">{{ translate('computers_management', locale) }}</span>
+                        </a>
+                        <a href="/admin/technicians" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 012-2h2a2 2 0 012 2v1m-6 0h6"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">{{ translate('technicians_management', locale) }}</span>
+                        </a>
+                        <a href="/admin/import" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">{{ translate('import_fleet', locale) }}</span>
+                        </a>
+                        <a href="/admin/protocol" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">Протокол ТО</span>
+                        </a>
+                        <a href="/admin/calendar" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">Календарь</span>
+                        </a>
+                        <a href="/admin/settings" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">{{ translate('settings', locale) }}</span>
+                        </a>
+                    {% endif %}
+
+                    {% if current_user.role.value in ["ADMIN", "TECHNICIAN"] %}
+                        <a href="/technician/schedule" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">{{ translate('technician_schedule', locale) }}</span>
+                        </a>
+                    {% endif %}
+
+                    {% if current_user.role.value in ["ADMIN", "OBSERVER", "TECHNICIAN"] %}
+                        <a href="/reports" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                            <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">{{ translate('reports', locale) }}</span>
+                        </a>
+                    {% endif %}
+
+                    <a href="/user/my-computers" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-slate-700 hover:text-white transition group focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                        <span :class="{'opacity-100': isHovered || open, 'opacity-0 md:hidden': !isHovered && !open}" class="whitespace-nowrap transition-opacity duration-200">{{ translate('my_computers', locale) }}</span>
+                    </a>
+                {% endif %}
+            </nav>
+        </aside>
+
+        <!-- Main Content Wrapper with Margin for Sidebar -->
+        <div class="pt-16 md:ml-16 min-h-screen flex flex-col transition-all duration-300">
+            <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {% block content %}{% endblock %}
+            </main>
+
+            <!-- Footer -->
+            <footer class="bg-slate-800 text-gray-400 text-sm py-4 border-t border-slate-700">
+                <div class="max-w-7xl mx-auto px-4 text-center">
+                    &copy; 2025 CFMS - {{ translate('app_title', locale) }}
+                </div>
+            </footer>
         </div>
-    </footer>
+    </div>
 </body>
 </html>

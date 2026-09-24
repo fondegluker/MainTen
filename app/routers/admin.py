@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 from math import ceil
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
@@ -1250,30 +1250,26 @@ def calendar_editor_page(
     parsed_year = parse_optional_int(year) or now_d.year
     parsed_month = parse_optional_int(month) or now_d.month
 
-    if not (1 <= parsed_month <= 12):
-        parsed_month = now_d.month
+    from app.core.i18n import get_locale
+    from app.services.scheduling_service import get_month_calendar_grid
 
-    import calendar
+    grid = get_month_calendar_grid(parsed_year, parsed_month, db, current_date=now_d)
+    locale_str = get_locale(request, current_user.locale)
 
-    _, num_days = calendar.monthrange(parsed_year, parsed_month)
-    month_days = []
+    if locale_str == "en":
+        weekday_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+    else:
+        weekday_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+        month_names = [
+            "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+            "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+        ]
 
-    for d in range(1, num_days + 1):
-        c_date = date(parsed_year, parsed_month, d)
-        entry = db.query(WorkingCalendar).filter(WorkingCalendar.date == c_date).first()
-        if not entry:
-            is_w = c_date.weekday() < 5
-            k = DayKind.WORKDAY if is_w else DayKind.WEEKEND
-            entry = WorkingCalendar(date=c_date, is_working=is_w, kind=k, description="", source="seed")
-
-        month_days.append(entry)
-
-    prev_month = 12 if parsed_month == 1 else parsed_month - 1
-    prev_year = parsed_year - 1 if parsed_month == 1 else parsed_year
-    next_month = 1 if parsed_month == 12 else parsed_month + 1
-    next_year = parsed_year + 1 if parsed_month == 12 else parsed_year
-
-    month_name = calendar.month_name[parsed_month]
+    month_name = month_names[grid["month"] - 1]
 
     return templates.TemplateResponse(
         "admin/calendar.html",
@@ -1281,14 +1277,17 @@ def calendar_editor_page(
             request,
             current_user,
             {
-                "month_days": month_days,
-                "year": parsed_year,
-                "month": parsed_month,
+                "weeks": grid["weeks"],
+                "year": grid["year"],
+                "month": grid["month"],
                 "month_name": month_name,
-                "prev_year": prev_year,
-                "prev_month": prev_month,
-                "next_year": next_year,
-                "next_month": next_month,
+                "prev_year": grid["prev_year"],
+                "prev_month": grid["prev_month"],
+                "next_year": grid["next_year"],
+                "next_month": grid["next_month"],
+                "min_year": grid["min_year"],
+                "max_year": grid["max_year"],
+                "weekday_names": weekday_names,
                 "message": message,
                 "error": error,
             },
@@ -1400,6 +1399,30 @@ def edit_calendar_day(
     return RedirectResponse(
         url=f"/admin/calendar?year={c_date.year}&month={c_date.month}&message=Параметры+дня+обновлены",
         status_code=status.HTTP_302_FOUND,
+    )
+
+
+@router.get("/calendar/import/template.csv")
+def download_calendar_template_csv(current_user: User = Depends(require_admin)):
+    from app.importer.calendar_import import generate_calendar_template_csv
+
+    content = generate_calendar_template_csv()
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="calendar_template.csv"'},
+    )
+
+
+@router.get("/calendar/import/template.json")
+def download_calendar_template_json(current_user: User = Depends(require_admin)):
+    from app.importer.calendar_import import generate_calendar_template_json
+
+    content = generate_calendar_template_json()
+    return Response(
+        content=content,
+        media_type="application/json; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="calendar_template.json"'},
     )
 
 
