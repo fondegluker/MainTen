@@ -5,5 +5,7 @@ max-line-length = 120
 ignore = ["B008", "RUF013", "UP007", "UP006"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests/unit", "tests/integration"]
 addopts = "--import-mode=importlib"
 pythonpath = "."
+markers = ["e2e: end-to-end browser tests"]

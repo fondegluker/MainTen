@@ -56,11 +56,10 @@ CFMS supports importing computer inventory from Excel (`.xlsx`) spreadsheets:
 ## Required CI Checks & Code Quality Rules
 
 All pull requests and branch merges must pass the following required CI checks in GitHub Actions:
-- **`Branch Name Check` (`branch-name-check`)**: Runs on `pull_request` events to ensure PR source branch names match `iteration-<N>`, `iteration-<N>-hotfix`, or `jules-<id>` (bypassed via `skip-branch-name-check` PR label).
 - **`Run Import Smoke Check` (`import-smoke`)**: Executes `pytest tests/test_import_smoke.py -x -q` to ensure all modules under `app/` are importable without syntax errors and no Python reserved keywords are used as package/module names (see [`docs/decisions.md`](docs/decisions.md)).
 - **`Run Ruff Linter & Format Check` (`lint`)**: Executes `ruff check .` and `ruff format --check .`.
 - **`Run Pytest Test Suite` (`tests`)**: Executes `pytest` across all unit/integration tests with `--import-mode=importlib`.
-- **`Run E2E Playwright Smoke Suite` (`e2e-smoke`)**: Executes `pytest tests/e2e/ -x -q` against the running web application stack.
+- **`Container Smoke Tests`**: Verifies E2E container startup and route health checks in Docker Compose.
 
 ---
 

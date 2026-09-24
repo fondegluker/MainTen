@@ -9,6 +9,8 @@ import httpx
 import pytest
 from playwright.sync_api import sync_playwright
 
+pytestmark = pytest.mark.e2e
+
 BASE_URL = os.getenv("E2E_BASE_URL", "http://localhost:8000")
 
 
