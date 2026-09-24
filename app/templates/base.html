@@ -30,6 +30,9 @@
                             <a href="/admin/computers" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('computers_management', locale) }}</a>
                             <a href="/admin/technicians" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('technicians_management', locale) }}</a>
                             <a href="/admin/import" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('import_fleet', locale) }}</a>
+                            <a href="/admin/protocol" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Протокол ТО</a>
+                            <a href="/admin/calendar" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Календарь</a>
+                            <a href="/admin/settings" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('settings', locale) }}</a>
                         {% endif %}
                         {% if current_user.role.value in ["ADMIN", "TECHNICIAN"] %}
                             <a href="/technician/schedule" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{{ translate('technician_schedule', locale) }}</a>

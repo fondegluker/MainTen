@@ -1,6 +1,8 @@
+from datetime import date, datetime, timezone
 from math import ceil
+from typing import Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
@@ -10,8 +12,23 @@ from app.auth.dependencies import require_admin
 from app.auth.providers import LocalAuthProvider
 from app.auth.tokens import generate_magic_link_token
 from app.core.database import get_db
-from app.core.validators import validate_ip, validate_mac
-from app.models.models import AuditLog, Computer, Setting, User, UserRole
+from app.core.validators import (
+    parse_optional_enum,
+    parse_optional_int,
+    parse_optional_str,
+    validate_ip,
+    validate_mac,
+)
+from app.models.models import (
+    AuditLog,
+    Computer,
+    DayKind,
+    MaintenanceProtocolItem,
+    Setting,
+    User,
+    UserRole,
+    WorkingCalendar,
+)
 from app.routers.web import context_with_defaults
 from app.services.audit_service import log_audit
 
@@ -24,9 +41,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/users", response_class=HTMLResponse)
 def list_users(
     request: Request,
-    q: str | None = Query(None),
-    role: str | None = Query(None),
-    status_filter: str | None = Query(None, alias="status"),
+    q: Any = Query(None),
+    role: Any = Query(None),
+    status_filter: Any = Query(None, alias="status"),
     sort_by: str = Query("id"),
     sort_order: str = Query("asc"),
     page: int = Query(1, ge=1),
@@ -37,18 +54,21 @@ def list_users(
 ):
     query = db.query(User)
 
-    if q and q.strip():
-        search_term = f"%{q.strip().lower()}%"
+    q_str = parse_optional_str(q)
+    if q_str:
+        search_term = f"%{q_str.lower()}%"
         query = query.filter(
             (func.lower(User.username).like(search_term)) | (func.lower(User.email_or_login).like(search_term))
         )
 
-    if role and role in [r.value for r in UserRole]:
-        query = query.filter(User.role == UserRole(role))
+    role_enum = parse_optional_enum(role, UserRole) if role is not None else None
+    if role_enum:
+        query = query.filter(User.role == role_enum)
 
-    if status_filter == "active":
+    status_str = parse_optional_str(status_filter)
+    if status_str == "active":
         query = query.filter(User.is_active == True)
-    elif status_filter == "inactive":
+    elif status_str == "inactive":
         query = query.filter(User.is_active == False)
 
     # Sorting
@@ -409,10 +429,10 @@ def set_technician_capacity(
 @router.get("/computers", response_class=HTMLResponse)
 def list_computers(
     request: Request,
-    q: str | None = Query(None),
-    location: str | None = Query(None),
-    rtc: str | None = Query(None),
-    owner_id: int | None = Query(None),
+    q: Any = Query(None),
+    location: Any = Query(None),
+    rtc: Any = Query(None),
+    owner_id: Any = Query(None),
     sort_by: str = Query("hostname"),
     sort_order: str = Query("asc"),
     page: int = Query(1, ge=1),
@@ -423,22 +443,26 @@ def list_computers(
 ):
     query = db.query(Computer)
 
-    if q and q.strip():
-        search_term = f"%{q.strip().lower()}%"
+    q_str = parse_optional_str(q)
+    if q_str:
+        search_term = f"%{q_str.lower()}%"
         query = query.filter(
             (func.lower(Computer.hostname).like(search_term)) | (func.lower(Computer.ip).like(search_term))
         )
 
-    if location and location.strip():
-        query = query.filter(func.lower(Computer.location).like(f"%{location.strip().lower()}%"))
+    loc_str = parse_optional_str(location)
+    if loc_str:
+        query = query.filter(func.lower(Computer.location).like(f"%{loc_str.lower()}%"))
 
-    if rtc == "yes":
+    rtc_str = parse_optional_str(rtc)
+    if rtc_str == "yes":
         query = query.filter(Computer.is_round_the_clock == True)
-    elif rtc == "no":
+    elif rtc_str == "no":
         query = query.filter(Computer.is_round_the_clock == False)
 
-    if owner_id:
-        query = query.filter(Computer.owner_user_id == owner_id)
+    parsed_owner_id = parse_optional_int(owner_id)
+    if parsed_owner_id is not None:
+        query = query.filter(Computer.owner_user_id == parsed_owner_id)
 
     # Sorting
     sort_column = getattr(Computer, sort_by, Computer.hostname)
@@ -831,15 +855,723 @@ def trigger_e2e_seed(current_user: User = Depends(require_admin), db: Session = 
     return seed_e2e(db)
 
 
+DEFAULT_SETTINGS = {
+    "interval_rtc_months": 6,
+    "interval_non_rtc_months": 12,
+    "selection_window_days": 20,
+    "prompt_start_offset_days": 10,
+    "technician_daily_capacity": 1,
+    "allow_short_days": True,
+    "timezone": "Europe/Minsk",
+}
+
+
+def get_all_app_settings(db: Session) -> dict[str, Any]:
+    current = dict(DEFAULT_SETTINGS)
+    setting_row = db.query(Setting).filter(Setting.key == "app_settings").first()
+    if setting_row and isinstance(setting_row.value_json, dict):
+        current.update(setting_row.value_json)
+    return current
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def settings_page(
+    request: Request,
+    message: str | None = None,
+    error: str | None = None,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    current_settings = get_all_app_settings(db)
+    return templates.TemplateResponse(
+        "admin/settings.html",
+        context_with_defaults(
+            request,
+            current_user,
+            {"settings": current_settings, "message": message, "error": error},
+        ),
+    )
+
+
+@router.post("/settings")
+def update_settings(
+    request: Request,
+    interval_rtc_months: int = Form(...),
+    interval_non_rtc_months: int = Form(...),
+    selection_window_days: int = Form(...),
+    prompt_start_offset_days: int = Form(...),
+    technician_daily_capacity: int = Form(...),
+    allow_short_days: bool | None = Form(False),
+    timezone_str: str = Form("Europe/Minsk", alias="timezone"),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    errors = []
+    if interval_rtc_months <= 0:
+        errors.append("Интервал ТО для 24/7 ПК должен быть больше 0.")
+    if interval_non_rtc_months <= 0:
+        errors.append("Интервал ТО для обычных ПК должен быть больше 0.")
+    if selection_window_days <= 0:
+        errors.append("Ширина окна выбора должна быть больше 0.")
+    if not (0 <= prompt_start_offset_days <= selection_window_days):
+        errors.append("Смещение начала напоминаний должно быть в пределах 0..selection_window_days.")
+    if technician_daily_capacity <= 0:
+        errors.append("Дневная норма техника должна быть больше 0.")
+
+    if errors:
+        current_settings = get_all_app_settings(db)
+        return templates.TemplateResponse(
+            "admin/settings.html",
+            context_with_defaults(
+                request,
+                current_user,
+                {"settings": current_settings, "error": "; ".join(errors)},
+            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    before_settings = get_all_app_settings(db)
+    new_settings = {
+        "interval_rtc_months": interval_rtc_months,
+        "interval_non_rtc_months": interval_non_rtc_months,
+        "selection_window_days": selection_window_days,
+        "prompt_start_offset_days": prompt_start_offset_days,
+        "technician_daily_capacity": technician_daily_capacity,
+        "allow_short_days": bool(allow_short_days),
+        "timezone": timezone_str.strip() or "Europe/Minsk",
+    }
+
+    row = db.query(Setting).filter(Setting.key == "app_settings").first()
+    if row:
+        row.value_json = new_settings
+    else:
+        row = Setting(key="app_settings", value_json=new_settings)
+        db.add(row)
+
+    for k, v in new_settings.items():
+        s_item = db.query(Setting).filter(Setting.key == k).first()
+        if s_item:
+            s_item.value_json = v
+        else:
+            db.add(Setting(key=k, value_json=v))
+
+    db.commit()
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="update_settings",
+        entity="settings",
+        before=before_settings,
+        after=new_settings,
+    )
+
+    return RedirectResponse(
+        url="/admin/settings?message=Настройки+успешно+сохранены", status_code=status.HTTP_302_FOUND
+    )
+
+
+@router.post("/settings/reset")
+def reset_settings(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    before_settings = get_all_app_settings(db)
+
+    row = db.query(Setting).filter(Setting.key == "app_settings").first()
+    if row:
+        row.value_json = dict(DEFAULT_SETTINGS)
+    else:
+        db.add(Setting(key="app_settings", value_json=dict(DEFAULT_SETTINGS)))
+
+    for k, v in DEFAULT_SETTINGS.items():
+        s_item = db.query(Setting).filter(Setting.key == k).first()
+        if s_item:
+            s_item.value_json = v
+        else:
+            db.add(Setting(key=k, value_json=v))
+
+    db.commit()
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="reset_settings",
+        entity="settings",
+        before=before_settings,
+        after=dict(DEFAULT_SETTINGS),
+    )
+
+    return RedirectResponse(
+        url="/admin/settings?message=Настройки+сброшены+к+значениям+по+умолчанию",
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
+# --- PROTOCOL EDITOR ---
+
+
+@router.get("/protocol", response_class=HTMLResponse)
+def list_protocol_items(
+    request: Request,
+    message: str | None = None,
+    error: str | None = None,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    items = db.query(MaintenanceProtocolItem).order_by(MaintenanceProtocolItem.order_index.asc()).all()
+    return templates.TemplateResponse(
+        "admin/protocol.html",
+        context_with_defaults(request, current_user, {"items": items, "message": message, "error": error}),
+    )
+
+
+@router.post("/protocol/create")
+def create_protocol_item(
+    request: Request,
+    title_ru: str = Form(...),
+    title_en: str = Form(...),
+    description: str | None = Form(None),
+    is_active: bool | None = Form(True),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    title_ru_str = parse_optional_str(title_ru)
+    title_en_str = parse_optional_str(title_en)
+
+    if not title_ru_str or not title_en_str:
+        items = db.query(MaintenanceProtocolItem).order_by(MaintenanceProtocolItem.order_index.asc()).all()
+        return templates.TemplateResponse(
+            "admin/protocol.html",
+            context_with_defaults(
+                request,
+                current_user,
+                {"items": items, "error": "Названия на русском и английском языках обязательны."},
+            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    max_idx = db.query(func.max(MaintenanceProtocolItem.order_index)).scalar()
+    next_idx = (max_idx + 1) if max_idx is not None else 0
+
+    item = MaintenanceProtocolItem(
+        order_index=next_idx,
+        title_ru=title_ru_str,
+        title_en=title_en_str,
+        description=parse_optional_str(description),
+        is_active=bool(is_active),
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="create_protocol_item",
+        entity="maintenance_protocol_items",
+        entity_id=item.id,
+        after={"title_ru": item.title_ru, "title_en": item.title_en, "order_index": item.order_index},
+    )
+
+    return RedirectResponse(
+        url="/admin/protocol?message=Пункт+протокола+успешно+добавлен", status_code=status.HTTP_302_FOUND
+    )
+
+
+@router.post("/protocol/{item_id}/edit")
+def update_protocol_item(
+    item_id: int,
+    request: Request,
+    title_ru: str = Form(...),
+    title_en: str = Form(...),
+    description: str | None = Form(None),
+    is_active: bool | None = Form(False),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    item = db.query(MaintenanceProtocolItem).filter(MaintenanceProtocolItem.id == item_id).first()
+    if not item:
+        return RedirectResponse(url="/admin/protocol", status_code=status.HTTP_302_FOUND)
+
+    title_ru_str = parse_optional_str(title_ru)
+    title_en_str = parse_optional_str(title_en)
+
+    if not title_ru_str or not title_en_str:
+        items = db.query(MaintenanceProtocolItem).order_by(MaintenanceProtocolItem.order_index.asc()).all()
+        return templates.TemplateResponse(
+            "admin/protocol.html",
+            context_with_defaults(
+                request,
+                current_user,
+                {"items": items, "error": "Названия на русском и английском языках обязательны."},
+            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    before_state = {
+        "title_ru": item.title_ru,
+        "title_en": item.title_en,
+        "is_active": item.is_active,
+    }
+
+    item.title_ru = title_ru_str
+    item.title_en = title_en_str
+    item.description = parse_optional_str(description)
+    item.is_active = bool(is_active)
+    item.updated_at = datetime.now(timezone.utc)
+
+    db.commit()
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="update_protocol_item",
+        entity="maintenance_protocol_items",
+        entity_id=item.id,
+        before=before_state,
+        after={"title_ru": item.title_ru, "title_en": item.title_en, "is_active": item.is_active},
+    )
+
+    return RedirectResponse(url="/admin/protocol?message=Пункт+протокола+обновлен", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/protocol/{item_id}/toggle")
+def toggle_protocol_item(item_id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    item = db.query(MaintenanceProtocolItem).filter(MaintenanceProtocolItem.id == item_id).first()
+    if item:
+        before_val = item.is_active
+        item.is_active = not item.is_active
+        item.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        log_audit(
+            db=db,
+            actor_user_id=current_user.id,
+            action="toggle_protocol_item",
+            entity="maintenance_protocol_items",
+            entity_id=item.id,
+            before={"is_active": before_val},
+            after={"is_active": item.is_active},
+        )
+
+    return RedirectResponse(url="/admin/protocol", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/protocol/{item_id}/delete")
+def delete_protocol_item(
+    item_id: int, request: Request, current_user: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    item = db.query(MaintenanceProtocolItem).filter(MaintenanceProtocolItem.id == item_id).first()
+    if not item:
+        return RedirectResponse(url="/admin/protocol", status_code=status.HTTP_302_FOUND)
+
+    from app.models.models import MaintenanceEventCheck
+
+    ref_count = (
+        db.query(func.count(MaintenanceEventCheck.id))
+        .filter(MaintenanceEventCheck.protocol_item_id == item.id)
+        .scalar()
+        or 0
+    )
+    if ref_count > 0:
+        items = db.query(MaintenanceProtocolItem).order_by(MaintenanceProtocolItem.order_index.asc()).all()
+        return templates.TemplateResponse(
+            "admin/protocol.html",
+            context_with_defaults(
+                request,
+                current_user,
+                {
+                    "items": items,
+                    "error": "Пункт используется в проведенных ТО. Вы можете деактивировать его вместо удаления.",
+                },
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    before_state = {"title_ru": item.title_ru, "order_index": item.order_index}
+    db.delete(item)
+    db.commit()
+
+    remaining = db.query(MaintenanceProtocolItem).order_by(MaintenanceProtocolItem.order_index.asc()).all()
+    for idx, rem_item in enumerate(remaining):
+        rem_item.order_index = idx
+    db.commit()
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="delete_protocol_item",
+        entity="maintenance_protocol_items",
+        entity_id=item_id,
+        before=before_state,
+    )
+
+    return RedirectResponse(url="/admin/protocol?message=Пункт+протокола+удален", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/protocol/reorder")
+def reorder_protocol_items(
+    item_ids: list[int] = Form(...),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    for new_idx, item_id in enumerate(item_ids):
+        item = db.query(MaintenanceProtocolItem).filter(MaintenanceProtocolItem.id == item_id).first()
+        if item:
+            item.order_index = new_idx
+    db.commit()
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="reorder_protocol_items",
+        entity="maintenance_protocol_items",
+        after={"item_ids_order": item_ids},
+    )
+
+    return RedirectResponse(url="/admin/protocol?message=Порядок+пунктов+обновлен", status_code=status.HTTP_302_FOUND)
+
+
+# --- WORKING CALENDAR EDITOR ---
+
+
+@router.get("/calendar", response_class=HTMLResponse)
+def calendar_editor_page(
+    request: Request,
+    year: Any = Query(None),
+    month: Any = Query(None),
+    message: str | None = None,
+    error: str | None = None,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    now_d = datetime.now(timezone.utc).date()
+    parsed_year = parse_optional_int(year) or now_d.year
+    parsed_month = parse_optional_int(month) or now_d.month
+
+    if not (1 <= parsed_month <= 12):
+        parsed_month = now_d.month
+
+    import calendar
+
+    _, num_days = calendar.monthrange(parsed_year, parsed_month)
+    month_days = []
+
+    for d in range(1, num_days + 1):
+        c_date = date(parsed_year, parsed_month, d)
+        entry = db.query(WorkingCalendar).filter(WorkingCalendar.date == c_date).first()
+        if not entry:
+            is_w = c_date.weekday() < 5
+            k = DayKind.WORKDAY if is_w else DayKind.WEEKEND
+            entry = WorkingCalendar(date=c_date, is_working=is_w, kind=k, description="", source="seed")
+
+        month_days.append(entry)
+
+    prev_month = 12 if parsed_month == 1 else parsed_month - 1
+    prev_year = parsed_year - 1 if parsed_month == 1 else parsed_year
+    next_month = 1 if parsed_month == 12 else parsed_month + 1
+    next_year = parsed_year + 1 if parsed_month == 12 else parsed_year
+
+    month_name = calendar.month_name[parsed_month]
+
+    return templates.TemplateResponse(
+        "admin/calendar.html",
+        context_with_defaults(
+            request,
+            current_user,
+            {
+                "month_days": month_days,
+                "year": parsed_year,
+                "month": parsed_month,
+                "month_name": month_name,
+                "prev_year": prev_year,
+                "prev_month": prev_month,
+                "next_year": next_year,
+                "next_month": next_month,
+                "message": message,
+                "error": error,
+            },
+        ),
+    )
+
+
+@router.post("/calendar/toggle")
+def toggle_calendar_day(
+    target_date_str: str = Form(..., alias="date"),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from datetime import date as py_date
+
+    try:
+        c_date = py_date.fromisoformat(target_date_str.strip())
+    except ValueError:
+        return RedirectResponse(url="/admin/calendar?error=Некорректная+дата", status_code=status.HTTP_302_FOUND)
+
+    entry = db.query(WorkingCalendar).filter(WorkingCalendar.date == c_date).first()
+    before_state = None
+
+    if entry:
+        before_state = {
+            "is_working": entry.is_working,
+            "kind": entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind),
+        }
+        entry.is_working = not entry.is_working
+        if entry.is_working:
+            entry.kind = DayKind.WORKDAY
+        else:
+            entry.kind = DayKind.WEEKEND if c_date.weekday() >= 5 else DayKind.HOLIDAY
+        entry.source = "admin"
+    else:
+        is_w = not (c_date.weekday() >= 5)
+        new_is_w = not is_w
+        k = DayKind.WORKDAY if new_is_w else (DayKind.WEEKEND if c_date.weekday() >= 5 else DayKind.HOLIDAY)
+        entry = WorkingCalendar(date=c_date, is_working=new_is_w, kind=k, source="admin")
+        db.add(entry)
+
+    db.commit()
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="toggle_calendar_day",
+        entity="working_calendar",
+        before=before_state,
+        after={"date": c_date.isoformat(), "is_working": entry.is_working, "kind": entry.kind.value},
+    )
+
+    return RedirectResponse(
+        url=f"/admin/calendar?year={c_date.year}&month={c_date.month}&message=Статус+дня+обновлен",
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
+@router.post("/calendar/edit-day")
+def edit_calendar_day(
+    target_date_str: str = Form(..., alias="date"),
+    kind: str = Form(...),
+    description: str | None = Form(None),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from datetime import date as py_date
+
+    try:
+        c_date = py_date.fromisoformat(target_date_str.strip())
+    except ValueError:
+        return RedirectResponse(url="/admin/calendar?error=Некорректная+дата", status_code=status.HTTP_302_FOUND)
+
+    parsed_kind = parse_optional_enum(kind, DayKind)
+    if not parsed_kind:
+        return RedirectResponse(url="/admin/calendar?error=Некорректный+тип+дня", status_code=status.HTTP_302_FOUND)
+
+    is_w = parsed_kind in (DayKind.WORKDAY, DayKind.SHORT_DAY)
+
+    entry = db.query(WorkingCalendar).filter(WorkingCalendar.date == c_date).first()
+    before_state = {"kind": entry.kind.value, "is_working": entry.is_working} if entry else None
+
+    if entry:
+        entry.kind = parsed_kind
+        entry.is_working = is_w
+        entry.description = parse_optional_str(description)
+        entry.source = "admin"
+    else:
+        entry = WorkingCalendar(
+            date=c_date,
+            kind=parsed_kind,
+            is_working=is_w,
+            description=parse_optional_str(description),
+            source="admin",
+        )
+        db.add(entry)
+
+    db.commit()
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="edit_calendar_day",
+        entity="working_calendar",
+        before=before_state,
+        after={"date": c_date.isoformat(), "kind": parsed_kind.value, "is_working": is_w},
+    )
+
+    return RedirectResponse(
+        url=f"/admin/calendar?year={c_date.year}&month={c_date.month}&message=Параметры+дня+обновлены",
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
+@router.post("/calendar/bulk-import")
+async def bulk_import_calendar(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from datetime import date as py_date
+
+    content_bytes = await file.read()
+    filename = file.filename.lower()
+
+    parsed_rows = []
+    errors = []
+
+    if filename.endswith(".json"):
+        import json
+
+        try:
+            data = json.loads(content_bytes.decode("utf-8"))
+            if not isinstance(data, list):
+                errors.append("JSON должен содержать массив объектов.")
+            else:
+                for idx, item in enumerate(data, start=1):
+                    if not isinstance(item, dict) or "date" not in item:
+                        errors.append(f"Запись #{idx}: отсутствует поле 'date'.")
+                        continue
+                    try:
+                        d_val = py_date.fromisoformat(str(item["date"]).strip())
+                        k_str = str(item.get("kind", "workday")).strip()
+                        k_enum = parse_optional_enum(k_str, DayKind) or DayKind.WORKDAY
+                        is_w = bool(item.get("is_working", k_enum in (DayKind.WORKDAY, DayKind.SHORT_DAY)))
+                        desc = str(item.get("description", "")).strip() or None
+                        parsed_rows.append({"date": d_val, "kind": k_enum, "is_working": is_w, "description": desc})
+                    except ValueError:
+                        errors.append(f"Запись #{idx}: некорректная дата '{item.get('date')}'.")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"Ошибка чтения JSON файла: {exc}")
+
+    elif filename.endswith(".csv"):
+        import csv
+        import io
+
+        try:
+            reader = csv.DictReader(io.StringIO(content_bytes.decode("utf-8")))
+            for idx, row in enumerate(reader, start=2):
+                if not row or not row.get("date"):
+                    continue
+                try:
+                    d_val = py_date.fromisoformat(row["date"].strip())
+                    k_str = (row.get("kind") or "workday").strip()
+                    k_enum = parse_optional_enum(k_str, DayKind) or DayKind.WORKDAY
+                    is_w = (
+                        row.get("is_working", "").strip().lower() in ("1", "true", "да", "yes")
+                        if "is_working" in row
+                        else (k_enum in (DayKind.WORKDAY, DayKind.SHORT_DAY))
+                    )
+                    desc = (row.get("description") or "").strip() or None
+                    parsed_rows.append({"date": d_val, "kind": k_enum, "is_working": is_w, "description": desc})
+                except ValueError:
+                    errors.append(f"Строка #{idx}: некорректная дата '{row.get('date')}'.")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"Ошибка чтения CSV файла: {exc}")
+
+    else:
+        errors.append("Пожалуйста, загрузите файл формата .csv или .json.")
+
+    if errors or not parsed_rows:
+        now_d = datetime.now(timezone.utc).date()
+        return RedirectResponse(
+            url=f"/admin/calendar?year={now_d.year}&month={now_d.month}&error={errors[0] if errors else 'Файл+пуст'}",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    try:
+        with db.begin_nested():
+            for r in parsed_rows:
+                entry = db.query(WorkingCalendar).filter(WorkingCalendar.date == r["date"]).first()
+                if entry:
+                    entry.kind = r["kind"]
+                    entry.is_working = r["is_working"]
+                    entry.description = r["description"]
+                    entry.source = "admin"
+                else:
+                    db.add(
+                        WorkingCalendar(
+                            date=r["date"],
+                            kind=r["kind"],
+                            is_working=r["is_working"],
+                            description=r["description"],
+                            source="admin",
+                        )
+                    )
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        return RedirectResponse(
+            url=f"/admin/calendar?error=Ошибка+при+импорте:+{exc}", status_code=status.HTTP_302_FOUND
+        )
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="bulk_import_calendar",
+        entity="working_calendar",
+        after={"imported_count": len(parsed_rows), "filename": file.filename},
+    )
+
+    first_d = parsed_rows[0]["date"]
+    return RedirectResponse(
+        url=f"/admin/calendar?year={first_d.year}&month={first_d.month}&message=Импортировано+{len(parsed_rows)}+записей+календаря",
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
+@router.post("/calendar/reset")
+def reset_calendar(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.services.scheduling_service import generate_calendar_seed_data
+
+    seed_records = generate_calendar_seed_data()
+
+    with db.begin_nested():
+        for r in seed_records:
+            entry = db.query(WorkingCalendar).filter(WorkingCalendar.date == r["date"]).first()
+            kind_enum = parse_optional_enum(r["kind"], DayKind) or DayKind.WORKDAY
+            if entry:
+                entry.is_working = r["is_working"]
+                entry.kind = kind_enum
+                entry.description = r["description"]
+                entry.source = "seed"
+            else:
+                db.add(
+                    WorkingCalendar(
+                        date=r["date"],
+                        is_working=r["is_working"],
+                        kind=kind_enum,
+                        description=r["description"],
+                        source="seed",
+                    )
+                )
+    db.commit()
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="reset_calendar",
+        entity="working_calendar",
+        after={"message": "Calendar reset to Belarus defaults for 2025-2026"},
+    )
+
+    now_d = datetime.now(timezone.utc).date()
+    return RedirectResponse(
+        url=f"/admin/calendar?year={now_d.year}&month={now_d.month}&message=Календарь+сброшен+к+производственному+календарю+РБ",
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
 # --- AUDIT LOG VIEWER ---
 
 
 @router.get("/audit", response_class=HTMLResponse)
 def list_audit_logs(
     request: Request,
-    q: str | None = Query(None),
-    entity: str | None = Query(None),
-    action: str | None = Query(None),
+    q: Any = Query(None),
+    entity: Any = Query(None),
+    action: Any = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(25, ge=1, le=100),
     current_user: User = Depends(require_admin),
@@ -847,17 +1579,20 @@ def list_audit_logs(
 ):
     query = db.query(AuditLog)
 
-    if q and q.strip():
-        search_term = f"%{q.strip().lower()}%"
+    q_str = parse_optional_str(q)
+    if q_str:
+        search_term = f"%{q_str.lower()}%"
         query = query.filter(
             (func.lower(AuditLog.action).like(search_term)) | (func.lower(AuditLog.entity).like(search_term))
         )
 
-    if entity and entity.strip():
-        query = query.filter(func.lower(AuditLog.entity) == entity.strip().lower())
+    entity_str = parse_optional_str(entity)
+    if entity_str:
+        query = query.filter(func.lower(AuditLog.entity) == entity_str.lower())
 
-    if action and action.strip():
-        query = query.filter(func.lower(AuditLog.action) == action.strip().lower())
+    action_str = parse_optional_str(action)
+    if action_str:
+        query = query.filter(func.lower(AuditLog.action) == action_str.lower())
 
     query = query.order_by(AuditLog.id.desc())
 

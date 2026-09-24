@@ -63,6 +63,23 @@ All pull requests and branch merges must pass the following required CI checks i
 
 ---
 
+## Combined Hotfix Resolutions (Issues 1–5)
+
+- **Issue 1 (Systemic Optional Query Parameter Parsing)**:
+  - Implemented reusable parsing helpers (`parse_optional_int`, `parse_optional_str`, `parse_optional_enum`) mapping empty strings `""`, whitespace, `"null"`, `"undefined"`, `"none"`, `"all"`, and `"*"` to `None`.
+  - Applied across all list endpoints so `GET /admin/computers?owner_id=` returns HTTP 200 showing all rows.
+- **Issue 2 (Centered Selection Window & Date Picker Filtering)**:
+  - Calculated selection window centered on trigger/due date (`[trigger_date - selection_window_days//2 .. trigger_date + selection_window_days//2]`).
+  - Implemented `is_working_day(cal_date, db) -> bool` as single source of truth for working day checks.
+  - Rendered non-working days, past dates, technician-booked dates, and computer-booked dates as disabled in the calendar UI with clear explanations.
+  - Implemented empty window escalation audit logging.
+- **Issue 3 (Admin Settings Page)**:
+  - Created `/admin/settings` (ADMIN only) with form validations, single-row `app_settings` persistence, audit logging (`update_settings`), and default reset action.
+- **Issue 4 (Protocol Editor)**:
+  - Created `/admin/protocol` (ADMIN only) with mandatory RU/EN title inputs, dense reordering (`order_index`), and deletion protection for referenced items (recommending deactivation `is_active = False`).
+- **Issue 5 (Working Calendar Editor)**:
+  - Created `/admin/calendar` (ADMIN only) with month view navigation, single-day toggles, `holiday` and `short_day` markings, bulk CSV/JSON import, and reset to Belarus calendar seed defaults. Added migration `88b9c0d1e2f3` for `DayKind.SHORT_DAY` and `WorkingCalendar.source = 'admin'`.
+
 ## Iteration 4 & Defect Hotfix Resolutions
 
 - **Defect 1 (Technician Schedule & Reports Pages)**:

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.models import (
     Computer,
+    DayKind,
     MaintenanceEvent,
     MaintenanceEventStatus,
     Setting,
@@ -16,6 +17,194 @@ from app.models.models import (
     WorkingCalendar,
 )
 from app.services.audit_service import log_audit
+
+BELARUS_HOLIDAYS = {
+    (1, 1): "Новый год",
+    (1, 2): "Новый год",
+    (1, 7): "Рождество Христово (православное)",
+    (3, 8): "День женщин",
+    (5, 1): "Праздник труда",
+    (5, 9): "День Победы",
+    (7, 3): "День Независимости Республики Беларусь",
+    (11, 7): "День Октябрьской революции",
+    (12, 25): "Рождество Христово (католическое)",
+}
+
+
+def generate_calendar_seed_data(years: tuple[int, ...] = (2025, 2026)) -> list[dict[str, Any]]:
+    records = []
+    for year in years:
+        current_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+        while current_date <= end_date:
+            month_day = (current_date.month, current_date.day)
+            weekday = current_date.weekday()
+
+            if month_day in BELARUS_HOLIDAYS:
+                is_working = False
+                kind = DayKind.HOLIDAY
+                desc = BELARUS_HOLIDAYS[month_day]
+            elif weekday >= 5:
+                is_working = False
+                kind = DayKind.WEEKEND
+                desc = "Выходной день"
+            else:
+                is_working = True
+                kind = DayKind.WORKDAY
+                desc = "Рабочий день"
+
+            records.append(
+                {
+                    "date": current_date,
+                    "is_working": is_working,
+                    "kind": kind,
+                    "description": desc,
+                }
+            )
+            current_date += timedelta(days=1)
+    return records
+
+
+def is_working_day(target_date: date, db: Session) -> bool:
+    """Single source of truth helper to check if target_date is a selectable working day."""
+    entry = db.query(WorkingCalendar).filter(WorkingCalendar.date == target_date).first()
+    allow_short_days = bool(get_setting_value(db, "allow_short_days", True))
+
+    if entry:
+        if entry.kind == DayKind.HOLIDAY or entry.kind == DayKind.WEEKEND or not entry.is_working:
+            return False
+        if entry.kind == DayKind.SHORT_DAY:
+            return allow_short_days
+        return True
+
+    # Fallback to standard Mon-Fri
+    return target_date.weekday() < 5
+
+
+def compute_window_bounds(trigger_date: date, db: Session) -> tuple[date, date, date]:
+    """Compute (window_start, window_end, prompt_start_date) centered on trigger_date."""
+    selection_window_days = int(get_setting_value(db, "selection_window_days", 20))
+    prompt_start_offset_days = int(get_setting_value(db, "prompt_start_offset_days", selection_window_days // 2))
+
+    half_window = selection_window_days // 2
+    window_start = trigger_date - timedelta(days=half_window)
+    window_end = trigger_date + timedelta(days=half_window)
+    prompt_start_date = trigger_date - timedelta(days=prompt_start_offset_days)
+
+    return window_start, window_end, prompt_start_date
+
+
+def get_window_calendar_days(computer_id: int, db: Session, today: date | None = None) -> dict[str, Any]:
+    """Get all calendar days in selection window centered on trigger_date with selection state."""
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+
+    computer = db.query(Computer).filter(Computer.id == computer_id).first()
+    if not computer:
+        return {
+            "days": [],
+            "window_start": None,
+            "window_end": None,
+            "prompt_start_date": None,
+            "has_selectable": False,
+        }
+
+    if not computer.next_maintenance_due_at:
+        computer.next_maintenance_due_at = compute_next_maintenance_due_at(computer, db)
+        db.add(computer)
+        db.commit()
+
+    trigger_date = (
+        computer.next_maintenance_due_at.date()
+        if isinstance(computer.next_maintenance_due_at, datetime)
+        else computer.next_maintenance_due_at
+    )
+
+    window_start, window_end, prompt_start_date = compute_window_bounds(trigger_date, db)
+    technicians = db.query(User).filter(User.role == UserRole.TECHNICIAN, User.is_active == True).all()
+    capacity_per_tech = int(get_setting_value(db, "technician_daily_capacity", 1))
+
+    days = []
+    has_selectable = False
+
+    curr_d = window_start
+    while curr_d <= window_end:
+        is_work = is_working_day(curr_d, db)
+        is_future = curr_d > today
+
+        # Check if same computer is booked
+        comp_booked = (
+            db.query(MaintenanceEvent)
+            .filter(
+                MaintenanceEvent.computer_id == computer_id,
+                MaintenanceEvent.scheduled_date == curr_d,
+                MaintenanceEvent.status.in_([MaintenanceEventStatus.PLANNED, MaintenanceEventStatus.IN_PROGRESS]),
+            )
+            .first()
+            is not None
+        )
+
+        # Check technician capacity
+        assigned_events = (
+            db.query(MaintenanceEvent.technician_id, func.count(MaintenanceEvent.id).label("event_count"))
+            .filter(
+                MaintenanceEvent.scheduled_date == curr_d,
+                MaintenanceEvent.status.in_([MaintenanceEventStatus.PLANNED, MaintenanceEventStatus.IN_PROGRESS]),
+            )
+            .group_by(MaintenanceEvent.technician_id)
+            .all()
+        )
+        tech_load = {tech_id: count for tech_id, count in assigned_events}
+        has_tech_capacity = any(tech_load.get(tech.id, 0) < capacity_per_tech for tech in technicians)
+
+        disabled_reason = None
+        if not is_future:
+            disabled_reason = "Прошедшая дата"
+        elif not is_work:
+            disabled_reason = "Выходной / Праздник"
+        elif comp_booked:
+            disabled_reason = "Занято для этого ПК"
+        elif not has_tech_capacity:
+            disabled_reason = "Нет свободных техников"
+
+        is_selectable = is_future and is_work and not comp_booked and has_tech_capacity
+        if is_selectable:
+            has_selectable = True
+
+        days.append(
+            {
+                "date": curr_d,
+                "date_str": curr_d.isoformat(),
+                "formatted": curr_d.strftime("%d.%m.%Y (%a)"),
+                "is_selectable": is_selectable,
+                "disabled_reason": disabled_reason,
+            }
+        )
+        curr_d += timedelta(days=1)
+
+    # Empty window escalation
+    if not has_selectable and today >= prompt_start_date:
+        log_audit(
+            db=db,
+            actor_user_id=None,
+            action="escalate_empty_window",
+            entity="computers",
+            entity_id=computer.id,
+            after={
+                "message": "Selection window has no available working dates",
+                "trigger_date": trigger_date.isoformat(),
+                "window_start": window_start.isoformat(),
+                "window_end": window_end.isoformat(),
+            },
+        )
+
+    return {
+        "days": days,
+        "window_start": window_start,
+        "window_end": window_end,
+        "prompt_start_date": prompt_start_date,
+        "has_selectable": has_selectable,
+    }
 
 
 def get_setting_value(db: Session, key: str, default: Any) -> Any:

@@ -27,6 +27,7 @@ class DayKind(str, enum.Enum):
     WORKDAY = "workday"
     WEEKEND = "weekend"
     HOLIDAY = "holiday"
+    SHORT_DAY = "short_day"
 
 
 class User(Base):
@@ -185,3 +186,4 @@ class WorkingCalendar(Base):
         Enum(DayKind, values_callable=lambda obj: [e.value for e in obj]), default=DayKind.WORKDAY, nullable=False
     )
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source: Mapped[str] = mapped_column(String(50), default="seed", nullable=False)

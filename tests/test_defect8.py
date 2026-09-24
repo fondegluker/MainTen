@@ -156,7 +156,7 @@ def test_window_future_state(db_session: Session):
     db_session.commit()
 
     today = datetime.now(timezone.utc).date()
-    due_date = today + timedelta(days=60)  # window opens 20 days prior (today + 40)
+    due_date = today + timedelta(days=60)
 
     comp = Computer(
         hostname="PC-D8-FUTURE",
@@ -181,7 +181,7 @@ def test_window_future_state(db_session: Session):
     res = client.get("/user/my-computers")
     assert res.status_code == 200
     assert "Окно выбора откроется" in res.text
-    prompt_start = due_date - timedelta(days=20)
+    prompt_start = due_date - timedelta(days=10)
     assert prompt_start.strftime("%d.%m.%Y") in res.text
 
     app.dependency_overrides.clear()
@@ -200,7 +200,7 @@ def test_window_expired_state(db_session: Session):
     db_session.commit()
 
     today = datetime.now(timezone.utc).date()
-    expired_due = today - timedelta(days=5)
+    expired_due = today - timedelta(days=20)
 
     comp = Computer(
         hostname="PC-D8-EXPIRED",

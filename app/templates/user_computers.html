@@ -110,13 +110,23 @@
                                 <form action="/user/schedule/{{ comp.id }}" method="POST" class="space-y-4">
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto p-1">
                                         {% for dt in item.available_dates %}
+                                        {% if dt.is_selectable %}
                                         <label class="flex items-center p-3 bg-white border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition shadow-sm">
                                             <input type="radio" name="scheduled_date_str" value="{{ dt.date_str }}" required class="text-amber-600 focus:ring-amber-500 h-4 w-4">
                                             <div class="ml-3">
                                                 <span class="block font-bold text-gray-900 text-sm">{{ dt.formatted }}</span>
-                                                <span class="block text-xs text-gray-500">Свободен техник &bull; {{ dt.description or 'Рабочий день' }}</span>
+                                                <span class="block text-xs text-green-700 font-semibold">Свободный рабочий день</span>
                                             </div>
                                         </label>
+                                        {% else %}
+                                        <div class="flex items-center p-3 bg-gray-100 border border-gray-200 rounded-lg opacity-60 cursor-not-allowed text-gray-500">
+                                            <input type="radio" disabled class="h-4 w-4 text-gray-400 cursor-not-allowed">
+                                            <div class="ml-3">
+                                                <span class="block font-medium text-gray-600 text-sm">{{ dt.formatted }}</span>
+                                                <span class="block text-xs text-red-600 font-medium">{{ dt.disabled_reason }}</span>
+                                            </div>
+                                        </div>
+                                        {% endif %}
                                         {% endfor %}
                                     </div>
 

@@ -1,6 +1,6 @@
 """User routes for CFMS (Iteration 4 + Defect 8 fixes)."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -13,8 +13,9 @@ from app.models.models import Computer, MaintenanceEvent, MaintenanceEventStatus
 from app.routers.web import context_with_defaults
 from app.services.scheduling_service import (
     compute_next_maintenance_due_at,
+    compute_window_bounds,
     get_available_dates,
-    get_setting_value,
+    get_window_calendar_days,
     schedule_maintenance,
 )
 
@@ -38,7 +39,6 @@ def user_computers_page(
 
     computers_data = []
     today = datetime.now(timezone.utc).date()
-    window_days = int(get_setting_value(db, "selection_window_days", 20))
 
     for comp in computers:
         if not comp.next_maintenance_due_at:
@@ -51,11 +51,11 @@ def user_computers_page(
             else comp.next_maintenance_due_at
         )
 
-        prompt_start_date = due_date - timedelta(days=window_days)
+        window_start, window_end, prompt_start_date = compute_window_bounds(due_date, db)
 
         if today < prompt_start_date:
             window_state = "future"
-        elif prompt_start_date <= today <= due_date:
+        elif prompt_start_date <= today <= window_end:
             window_state = "active"
         else:
             window_state = "expired"
@@ -67,9 +67,7 @@ def user_computers_page(
             .first()
         )
 
-        available_dates = []
-        if window_state == "active" or planned_event:
-            available_dates = get_available_dates(comp.id, db, today=today, days_ahead=window_days)
+        window_calendar = get_window_calendar_days(comp.id, db, today=today)
 
         # Get past maintenance events with details
         past_events = (
@@ -89,10 +87,13 @@ def user_computers_page(
                 "computer": comp,
                 "due_date": due_date,
                 "prompt_start_date": prompt_start_date,
+                "window_start": window_start,
+                "window_end": window_end,
                 "window_state": window_state,
                 "window_open": window_state == "active",
                 "planned_event": planned_event,
-                "available_dates": available_dates,
+                "window_calendar": window_calendar,
+                "available_dates": window_calendar["days"],
                 "past_events": past_events,
                 "is_manager": len(computers) > 1,
             }

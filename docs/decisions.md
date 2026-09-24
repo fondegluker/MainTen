@@ -17,6 +17,18 @@
   4. `tests` (`pytest`): Full test suite execution with `--import-mode=importlib`.
   5. `e2e-smoke` (`pytest tests/e2e/ -x -q`): Mandatory end-to-end browser smoke suite using Playwright walking every role through every navigation link, asserting HTTP status codes (200 for allowed, 403 for forbidden), toggling localization, and testing magic link booking.
 
+## Combined Hotfix Resolutions (Issues 1–5)
+
+- **Issue 1 (Systemic Optional Query Parameter Parsing)**: Created reusable parsing helpers (`parse_optional_int`, `parse_optional_str`, `parse_optional_enum` in `app/core/validators.py`) that map empty strings `""`, whitespace, `"null"`, `"undefined"`, `"none"`, `"all"`, and `"*"` to `None`. Applied across all list endpoints so `GET /admin/computers?owner_id=` returns HTTP 200 with all rows instead of throwing HTTP 422 int parsing errors.
+- **Issue 2 (Centered Selection Window & Single Source of Truth Calendar Filtering)**:
+  - Calculated selection window as centered around the trigger/due date (`[trigger_date - selection_window_days//2 .. trigger_date + selection_window_days//2]`).
+  - Implemented `is_working_day(cal_date, db) -> bool` in `app/services/scheduling_service.py` as the single source of truth for working day checks across the application.
+  - Disabled non-working days, past dates, technician-booked dates, and computer-booked dates in the UI with explicit explanation badges instead of silently hiding them.
+  - Added automatic escalation audit logging (`escalate_empty_window`) when zero selectable dates exist in an active selection window.
+- **Issue 3 (Admin Settings Page & Persistence)**: Created `/admin/settings` (ADMIN only) with form validations (`intervals > 0`, `window > 0`, `0 <= prompt_start_offset <= selection_window_days`), audit logging (`update_settings`), single-row `app_settings` persistence in the `settings` table, and a reset button (`POST /admin/settings/reset`).
+- **Issue 4 (Protocol Editor & Reference Protection)**: Created `/admin/protocol` (ADMIN only) with RU/EN mandatory title inputs, dense reordering (`order_index`), and deletion protection for protocol items referenced in `maintenance_event_checks` (recommending deactivation `is_active = False`).
+- **Issue 5 (Working Calendar Editor & Migration)**: Created `/admin/calendar` (ADMIN only) with month view navigation, single-day toggles, `holiday` and `short_day` markings, bulk CSV/JSON import, and reset to Belarus calendar seed defaults. Added migration `88b9c0d1e2f3` for `DayKind.SHORT_DAY` and `WorkingCalendar.source = 'admin'`.
+
 ## Permanent E2E Smoke Test Suite Adoption
 
 - **Mandatory Requirement**: Adopted `e2e-smoke` as a permanent, non-negotiable requirement for every present and future iteration.
