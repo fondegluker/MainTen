@@ -95,8 +95,10 @@ def compute_window_bounds(trigger_date: date, db: Session) -> tuple[date, date, 
     return window_start, window_end, prompt_start_date
 
 
-def get_window_calendar_days(computer_id: int, db: Session, today: date | None = None, locale: str = "ru") -> dict[str, Any]:
-    """Get all calendar days in selection window centered on trigger_date with selection state."""
+def compute_available_dates(
+    computer_id: int, db: Session, today: date | None = None, locale: str = "ru"
+) -> dict[str, Any]:
+    """Single source of truth function for available, selectable, and blocked maintenance dates."""
     if today is None:
         today = datetime.now(timezone.utc).date()
 
@@ -105,10 +107,12 @@ def get_window_calendar_days(computer_id: int, db: Session, today: date | None =
     computer = db.query(Computer).filter(Computer.id == computer_id).first()
     if not computer:
         return {
-            "days": [],
             "window_start": None,
             "window_end": None,
-            "prompt_start_date": None,
+            "prompt_start": None,
+            "selectable": [],
+            "blocked": [],
+            "days": [],
             "has_selectable": False,
         }
 
@@ -128,6 +132,8 @@ def get_window_calendar_days(computer_id: int, db: Session, today: date | None =
     capacity_per_tech = int(get_setting_value(db, "technician_daily_capacity", 1))
 
     days = []
+    selectable_dates = []
+    blocked_dates = []
     has_selectable = False
 
     curr_d = window_start
@@ -161,23 +167,33 @@ def get_window_calendar_days(computer_id: int, db: Session, today: date | None =
         has_tech_capacity = any(tech_load.get(tech.id, 0) < capacity_per_tech for tech in technicians)
 
         disabled_reason = None
+        block_code = None
         if not is_future:
-            disabled_reason = "Прошедшая дата"
+            disabled_reason = "Прошедшая дата" if locale == "ru" else "Past date"
+            block_code = "past"
         elif not is_work:
-            disabled_reason = "Выходной / Праздник"
+            disabled_reason = "Выходной / Праздник" if locale == "ru" else "Weekend / Holiday"
+            block_code = "weekend"
         elif comp_booked:
-            disabled_reason = "Занято для этого ПК"
+            disabled_reason = "Занято для этого ПК" if locale == "ru" else "Already booked for this computer"
+            block_code = "booked"
         elif not has_tech_capacity:
-            disabled_reason = "Нет свободных техников"
+            disabled_reason = "Нет свободных техников" if locale == "ru" else "No available technicians"
+            block_code = "capacity_full"
 
         is_selectable = is_future and is_work and not comp_booked and has_tech_capacity
+        d_str = curr_d.isoformat()
+
         if is_selectable:
             has_selectable = True
+            selectable_dates.append(d_str)
+        else:
+            blocked_dates.append({"date": d_str, "reason": block_code or "disabled"})
 
         days.append(
             {
                 "date": curr_d,
-                "date_str": curr_d.isoformat(),
+                "date_str": d_str,
                 "formatted": format_date_localized(curr_d, locale=locale),
                 "is_selectable": is_selectable,
                 "disabled_reason": disabled_reason,
@@ -202,12 +218,19 @@ def get_window_calendar_days(computer_id: int, db: Session, today: date | None =
         )
 
     return {
+        "window_start": window_start.isoformat(),
+        "window_end": window_end.isoformat(),
+        "prompt_start": prompt_start_date.isoformat(),
+        "selectable": selectable_dates,
+        "blocked": blocked_dates,
         "days": days,
-        "window_start": window_start,
-        "window_end": window_end,
-        "prompt_start_date": prompt_start_date,
         "has_selectable": has_selectable,
     }
+
+
+def get_window_calendar_days(computer_id: int, db: Session, today: date | None = None, locale: str = "ru") -> dict[str, Any]:
+    """Wrapper returning compute_available_dates for calendar template rendering."""
+    return compute_available_dates(computer_id, db, today=today, locale=locale)
 
 
 def get_setting_value(db: Session, key: str, default: Any) -> Any:
@@ -342,7 +365,7 @@ def get_available_dates(
 def validate_maintenance_date(
     computer_id: int, target_date: date, db: Session, today: date | None = None
 ) -> tuple[bool, str | None]:
-    """Validate if target_date can be scheduled for computer_id according to business rules."""
+    """Validate if target_date can be scheduled for computer_id using compute_available_dates as single source of truth."""
     if today is None:
         today = datetime.now(timezone.utc).date()
 
@@ -352,61 +375,25 @@ def validate_maintenance_date(
     if not is_working_day(target_date, db):
         return False, "Выбранный день является выходным или праздничным"
 
-    computer = db.query(Computer).filter(Computer.id == computer_id).first()
-    if not computer:
-        return False, "Компьютер не найден"
+    data = compute_available_dates(computer_id, db, today=today)
+    target_str = target_date.isoformat()
 
-    if not computer.next_maintenance_due_at:
-        computer.next_maintenance_due_at = compute_next_maintenance_due_at(computer, db)
-        db.add(computer)
-        db.commit()
+    if target_str in data["selectable"]:
+        return True, None
 
-    trigger_date = (
-        computer.next_maintenance_due_at.date()
-        if isinstance(computer.next_maintenance_due_at, datetime)
-        else computer.next_maintenance_due_at
-    )
+    for item in data["blocked"]:
+        if item["date"] == target_str:
+            reason = item["reason"]
+            if reason == "past":
+                return False, "Выберите будущую дату"
+            if reason == "weekend":
+                return False, "Выбранный день является выходным или праздничным"
+            if reason == "booked":
+                return False, "Эта дата уже забронирована для данного компьютера"
+            if reason == "capacity_full":
+                return False, "На выбранную дату нет свободных техников"
 
-    window_start, window_end, _ = compute_window_bounds(trigger_date, db)
-    if target_date < window_start or target_date > window_end:
-        return False, "Дата находится за пределами допустимого окна выбора"
-
-    # Check if same computer is booked on target_date
-    existing_comp_event = (
-        db.query(MaintenanceEvent)
-        .filter(
-            MaintenanceEvent.computer_id == computer_id,
-            MaintenanceEvent.scheduled_date == target_date,
-            MaintenanceEvent.status.in_([MaintenanceEventStatus.PLANNED, MaintenanceEventStatus.IN_PROGRESS]),
-        )
-        .first()
-    )
-    if existing_comp_event:
-        return False, "Эта дата уже забронирована для данного компьютера"
-
-    # Check technician capacity
-    technicians = db.query(User).filter(User.role == UserRole.TECHNICIAN, User.is_active == True).all()
-    if not technicians:
-        return False, "Нет активных техников"
-
-    capacity_per_tech = int(get_setting_value(db, "technician_daily_capacity", 1))
-
-    assigned_events = (
-        db.query(MaintenanceEvent.technician_id, func.count(MaintenanceEvent.id).label("event_count"))
-        .filter(
-            MaintenanceEvent.scheduled_date == target_date,
-            MaintenanceEvent.status.in_([MaintenanceEventStatus.PLANNED, MaintenanceEventStatus.IN_PROGRESS]),
-        )
-        .group_by(MaintenanceEvent.technician_id)
-        .all()
-    )
-    tech_load = {tech_id: count for tech_id, count in assigned_events}
-    has_capacity = any(tech_load.get(tech.id, 0) < capacity_per_tech for tech in technicians)
-
-    if not has_capacity:
-        return False, "На выбранную дату нет свободных техников"
-
-    return True, None
+    return False, "Дата находится за пределами допустимого окна выбора"
 
 
 def schedule_maintenance(computer_id: int, selected_date: date, user_id: int, db: Session) -> MaintenanceEvent:

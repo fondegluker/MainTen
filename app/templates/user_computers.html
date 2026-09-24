@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/date_picker.html" import render_date_picker %}
 
 {% block title %}{{ translate('my_computers', locale) }} - CFMS{% endblock %}
 
@@ -49,7 +50,7 @@
                         <a href="/user/my-computers/{{ comp.id }}" id="info-btn-{{ comp.id }}"
                            class="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg border border-gray-300 transition flex items-center gap-1.5">
                             <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            <span>Информация о моём компьютере</span>
+                            <span>{{ translate('my_computer_info', locale) }}</span>
                         </a>
                     </div>
                 </div>
@@ -61,83 +62,43 @@
                         <div class="p-5 bg-indigo-50 border border-indigo-200 rounded-xl space-y-3">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <span class="text-xs uppercase tracking-wider text-indigo-600 font-bold">Выбранная дата технического обслуживания:</span>
+                                    <span class="text-xs uppercase tracking-wider text-indigo-600 font-bold">{{ translate('chosen_maintenance_date', locale) }}</span>
                                     <div class="text-2xl font-bold text-indigo-900 mt-0.5">
                                         {{ item.planned_event.scheduled_date.strftime('%d.%m.%Y') }}
                                     </div>
                                 </div>
                                 <button type="button" onclick="document.getElementById('edit-picker-{{ comp.id }}').classList.toggle('hidden')"
                                         class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition shadow-sm">
-                                    Изменить дату
+                                    {{ translate('change_date', locale) }}
                                 </button>
                             </div>
 
-                            <!-- Optional Hidden Reschedule Form -->
+                            <!-- Shared Reschedule Date Picker Component -->
                             <div id="edit-picker-{{ comp.id }}" class="hidden pt-4 border-t border-indigo-200 space-y-3">
-                                <h3 class="text-sm font-bold text-indigo-900">Выберите новую дату обслуживания:</h3>
+                                <h3 class="text-sm font-bold text-indigo-900">{{ translate('select_new_date', locale) }}</h3>
                                 {% if item.available_dates %}
-                                    <form action="/user/schedule/{{ comp.id }}" method="POST" class="space-y-3">
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                                            {% for dt in item.available_dates %}
-                                            <label class="flex items-center p-2.5 bg-white border border-indigo-200 rounded-lg cursor-pointer hover:bg-indigo-100 transition text-xs">
-                                                <input type="radio" name="scheduled_date_str" value="{{ dt.date_str }}" required class="text-indigo-600">
-                                                <span class="ml-2 font-semibold text-gray-800">{{ dt.formatted }}</span>
-                                            </label>
-                                            {% endfor %}
-                                        </div>
-                                        <button type="submit" class="px-5 py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg shadow hover:bg-indigo-700 transition">
-                                            Сохранить новую дату
-                                        </button>
-                                    </form>
+                                    {{ render_date_picker(comp.id, item.available_dates, mode='change', submit_label=translate('save_new_date', locale), locale=locale) }}
                                 {% else %}
-                                    <p class="text-xs text-indigo-800 italic">Нет свободных рабочих дат для переноса.</p>
+                                    <p class="text-xs text-indigo-800 italic">{{ translate('no_available_dates', locale) }}</p>
                                 {% endif %}
                             </div>
                         </div>
 
                     {% elif item.window_state == 'active' %}
-                        <!-- Primary Date Picker Calendar / List -->
+                        <!-- Shared Primary Date Picker Component -->
                         <div class="p-5 bg-amber-50 border border-amber-300 rounded-xl space-y-4">
                             <div class="flex items-center justify-between border-b border-amber-200 pb-2">
                                 <h3 class="text-lg font-bold text-amber-900 flex items-center gap-2">
                                     <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                    Выберите дату технического обслуживания (ТО)
+                                    {{ translate('select_maintenance_date', locale) }}
                                 </h3>
-                                <span class="text-xs text-amber-800 font-semibold">Срок до {{ item.due_date.strftime('%d.%m.%Y') }}</span>
+                                <span class="text-xs text-amber-800 font-semibold">{{ translate('due_by', locale) }} {{ item.due_date.strftime('%d.%m.%Y') }}</span>
                             </div>
 
                             {% if item.available_dates %}
-                                <form action="/user/schedule/{{ comp.id }}" method="POST" class="space-y-4">
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto p-1">
-                                        {% for dt in item.available_dates %}
-                                        {% if dt.is_selectable %}
-                                        <label class="flex items-center p-3 bg-white border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition shadow-sm">
-                                            <input type="radio" name="scheduled_date_str" value="{{ dt.date_str }}" required class="text-amber-600 focus:ring-amber-500 h-4 w-4">
-                                            <div class="ml-3">
-                                                <span class="block font-bold text-gray-900 text-sm">{{ dt.formatted }}</span>
-                                                <span class="block text-xs text-green-700 font-semibold">Свободный рабочий день</span>
-                                            </div>
-                                        </label>
-                                        {% else %}
-                                        <div class="flex items-center p-3 bg-gray-100 border border-gray-200 rounded-lg opacity-60 cursor-not-allowed text-gray-500">
-                                            <input type="radio" disabled class="h-4 w-4 text-gray-400 cursor-not-allowed">
-                                            <div class="ml-3">
-                                                <span class="block font-medium text-gray-600 text-sm">{{ dt.formatted }}</span>
-                                                <span class="block text-xs text-red-600 font-medium">{{ dt.disabled_reason }}</span>
-                                            </div>
-                                        </div>
-                                        {% endif %}
-                                        {% endfor %}
-                                    </div>
-
-                                    <div class="pt-2 flex justify-end">
-                                        <button type="submit" class="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm rounded-lg shadow transition">
-                                            Выбрать эту дату
-                                        </button>
-                                    </div>
-                                </form>
+                                {{ render_date_picker(comp.id, item.available_dates, mode='initial', submit_label=translate('select_this_date', locale), locale=locale) }}
                             {% else %}
-                                <p class="text-xs text-amber-900 italic">К сожалению, нет доступных свободных рабочих дней в окне выбора. Обратитесь к администратору.</p>
+                                <p class="text-xs text-amber-900 italic">{{ translate('no_available_dates', locale) }}</p>
                             {% endif %}
                         </div>
 
@@ -145,7 +106,7 @@
                         <!-- Window Not Open Yet -->
                         <div class="p-5 bg-gray-50 border border-gray-200 rounded-xl space-y-1">
                             <div class="text-sm font-semibold text-gray-800">
-                                Окно выбора откроется {{ item.prompt_start_date.strftime('%d.%m.%Y') }}
+                                {{ translate('window_opens_on', locale) }} {{ item.prompt_start_date.strftime('%d.%m.%Y') }}
                             </div>
                             <p class="text-xs text-gray-500">
                                 До {{ item.due_date.strftime('%d.%m.%Y') }} вы получите возможность выбрать удобную дату обслуживания.
@@ -174,4 +135,28 @@
         </div>
     {% endif %}
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.date-picker-form').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            const errorBox = form.querySelector('.inline-error-alert');
+            if (errorBox) {
+                errorBox.classList.add('hidden');
+                errorBox.textContent = '';
+            }
+
+            // Check if radio selection is disabled or forced
+            const selectedRadio = form.querySelector('input[name="scheduled_date_str"]:checked');
+            if (selectedRadio && selectedRadio.disabled) {
+                e.preventDefault();
+                if (errorBox) {
+                    errorBox.textContent = selectedRadio.title || 'Выбранный день недоступен для записи.';
+                    errorBox.classList.remove('hidden');
+                }
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

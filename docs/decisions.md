@@ -116,10 +116,12 @@ The repository integrates shell scripts for deployment and local testing:
 - **Issue 3 (Localized Date Picker Weekday & Month Names)**:
   - Created `format_date_localized()` in `app/core/i18n.py` formatting dates with localized weekday abbreviations (`Пн`..`Вс` in `ru` vs `Mon`..`Sun` in `en`).
   - Updated `get_window_calendar_days` and `user.py` router to format dates according to the user's active locale.
-- **Issue 4 (Prohibit Weekend Selection & Defense-in-Depth Validation)**:
-  - Created `validate_maintenance_date()` in `app/services/scheduling_service.py` enforcing working day checks, future dates, selection window bounds, and technician capacity.
-  - Disabled weekend/invalid dates in both initial date picker and "Изменить дату" reschedule picker with explanation tooltips.
-  - Updated `POST /user/schedule/{computer_id}` to reject invalid/weekend date submissions directly with `HTTP 422 Unprocessable Entity`.
+- **Issue 4 (Prohibit Weekend Selection, Single Source of Truth & Shared Date Picker Component)**:
+  - Created `compute_available_dates()` in `app/services/scheduling_service.py` returning `selectable` dates, `blocked` dates with reason codes (`weekend`, `holiday`, `booked`, `past`, `capacity_full`), and formatted day objects.
+  - Exposed `GET /api/computers/{id}/available-dates` returning JSON available date metadata.
+  - Created reusable Jinja component `app/templates/components/date_picker.html` imported across `/user/my-computers` and `/user/schedule/{id}` for both initial selection and "Изменить дату" reschedule flows.
+  - Enforced `disabled`, `aria-disabled="true"`, greyed styles, and tooltip hover reasons on non-selectable days across all pickers.
+  - Updated `validate_maintenance_date()` to validate against `compute_available_dates()` and reject non-selectable date submissions with `HTTP 422 Unprocessable Entity`.
 - **Issue 5 (Left Sidebar Navigation Layout)**:
   - Refactored `app/templates/base.html` replacing horizontal top navigation with a fixed left sidebar (`aside#sidebar-nav`).
   - Implemented default collapsed state (`w-16`), desktop hover expansion (`w-64`), 375px mobile viewport drawer overlay with hamburger toggle, and keyboard accessibility (Escape key handler, focus rings, `aria-expanded`, `aria-label`).

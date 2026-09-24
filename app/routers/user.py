@@ -13,6 +13,7 @@ from app.core.i18n import get_locale
 from app.models.models import Computer, MaintenanceEvent, MaintenanceEventStatus, User, UserRole
 from app.routers.web import context_with_defaults
 from app.services.scheduling_service import (
+    compute_available_dates,
     compute_next_maintenance_due_at,
     compute_window_bounds,
     get_available_dates,
@@ -23,6 +24,29 @@ from app.services.scheduling_service import (
 
 router = APIRouter(prefix="/user", tags=["user"])
 templates = Jinja2Templates(directory="app/templates")
+
+
+@router.get("/api/computers/{computer_id}/available-dates")
+def get_computer_available_dates_api(
+    computer_id: int,
+    mode: str = "initial",
+    request: Request = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """API endpoint returning single source of truth available and blocked maintenance dates."""
+    computer = db.query(Computer).filter(Computer.id == computer_id).first()
+    if not computer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Компьютер не найден")
+
+    if current_user.role != UserRole.ADMIN and computer.owner_user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещен")
+
+    active_locale = get_locale(request, current_user.locale)
+    today = datetime.now(timezone.utc).date()
+    data = compute_available_dates(computer.id, db, today=today, locale=active_locale)
+    data["mode"] = mode
+    return data
 
 
 @router.get("/my-computers", response_class=HTMLResponse)
@@ -182,7 +206,8 @@ def schedule_date_picker_page(
     if current_user.role != UserRole.ADMIN and computer.owner_user_id != current_user.id:
         return RedirectResponse(url="/user/my-computers?error=Доступ+запрещен", status_code=status.HTTP_302_FOUND)
 
-    available_dates = get_available_dates(computer.id, db)
+    active_locale = get_locale(request, current_user.locale)
+    available_dates = compute_available_dates(computer.id, db, locale=active_locale)["days"]
 
     planned_event = (
         db.query(MaintenanceEvent)
