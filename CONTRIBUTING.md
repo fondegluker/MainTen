@@ -4,6 +4,68 @@ This repository follows a **single long-lived working-branch model** for develop
 
 ---
 
+## Definition of Done for EVERY iteration
+
+Every iteration, without exception, must ship with:
+1. All unit and integration tests green.
+2. `ruff check .` and `ruff format --check .` clean.
+3. `import-smoke` green (all `app/` modules importable).
+4. **`e2e-smoke` green** — a real browser walks every role through every nav link, asserts no 404/500, toggles the locale, and follows a magic-link through to a working date picker.
+5. README and `docs/decisions.md` updated.
+6. No new branch created; work stays in the current branch.
+
+If `e2e-smoke` is not green, the iteration is NOT done, no matter what the other tests say. This rule is mandatory and must not be skipped or deferred to a "later iteration".
+
+---
+
+## How to run e2e locally
+
+To run the end-to-end smoke test suite locally:
+
+1. **Start the application stack**:
+   ```bash
+   docker compose up -d --build
+   # OR start background server:
+   # uvicorn app.main:app --port 8000
+   ```
+2. **Execute the E2E Playwright smoke suite**:
+   ```bash
+   pytest tests/e2e/ -x -q
+   ```
+3. **Inspect failure artifacts**:
+   In case of a failure, inspect `artifacts/app.log` or container logs via `docker compose logs web`.
+
+---
+
+## Standard prompt for starting an iteration
+
+When starting any iteration, copy this template verbatim:
+
+```
+Read docs/requirements.md and CONTRIBUTING.md.
+Implement Iteration <N> ONLY.
+
+Global iteration requirements (see CONTRIBUTING.md) apply:
+
+    unit + integration tests green,
+
+    ruff check + ruff format clean,
+
+    import-smoke green,
+
+    e2e-smoke green (mandatory, no exceptions),
+
+    README + docs/decisions.md updated,
+
+    work ONLY in the current branch; do NOT create, rename, or
+    delete branches; do NOT push to main.
+
+Do NOT start Iteration <N+1>.
+Stop after all required checks are green and post a summary.
+```
+
+---
+
 ## 1. Working Branch Model
 
 - **Working Branch:** All development happens in a single long-lived working branch (e.g. `jules-3805668974257506057-99790dda` or active working branch). Auto-generated `jules-*` branch names are expected and fully acceptable.
@@ -27,7 +89,7 @@ All commits pushed to the working branch must pass the following required CI che
 - **`Run Import Smoke Check` (`import-smoke`)**: Executes `pytest tests/test_import_smoke.py -x -q` to verify every module under `app/` imports without error and no Python reserved keywords (like `import`) are used as package or module names.
 - **`Run Ruff Linter & Format Check` (`lint` / `format`)**: Executes `ruff check .` and `ruff format --check .`.
 - **`Run Pytest Test Suite` (`tests`)**: Executes `pytest` with `--import-mode=importlib`.
-- **`Container Smoke Tests`**: Verifies E2E container startup and route health checks in Docker Compose.
+- **`Run E2E Playwright Smoke Suite` (`e2e-smoke`)**: Executes `pytest tests/e2e/ -x -q` against the running web application stack.
 
 ---
 

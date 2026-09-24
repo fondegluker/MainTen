@@ -15,7 +15,14 @@
   2. `lint` (`ruff check .`): Linter check.
   3. `format` (`ruff format --check .`): Formatting check.
   4. `tests` (`pytest`): Full test suite execution with `--import-mode=importlib`.
-  5. `container-smoke`: Docker Compose E2E container startup and HTTP health checks.
+  5. `e2e-smoke` (`pytest tests/e2e/ -x -q`): Mandatory end-to-end browser smoke suite using Playwright walking every role through every navigation link, asserting HTTP status codes (200 for allowed, 403 for forbidden), toggling localization, and testing magic link booking.
+
+## Permanent E2E Smoke Test Suite Adoption
+
+- **Mandatory Requirement**: Adopted `e2e-smoke` as a permanent, non-negotiable requirement for every present and future iteration.
+- **Chosen Browser Driver**: Playwright (Python `playwright` sync API) was selected for native headless Chromium execution, multi-context session isolation per role, fast selector execution, and robust NetworkIdle waiting.
+- **Seeding Strategy**: Implemented `app/seed_e2e.py` providing an idempotent seed dataset (1 admin, 1 technician, 1 observer, 1 user, 2 computers, 1 protocol item, and 2025–2026 working calendar). Accessible via CLI (`python -m app.seed_e2e`) and `POST /admin/seed-e2e`.
+- **Log Inspection**: Automated assertion in `tests/e2e/test_smoke.py` scanning application container logs for unhandled exceptions or tracebacks.
 
 ## Fleet Import Template & Single Source of Truth
 

@@ -12,6 +12,22 @@ Never mix more than one iteration into a single commit/PR.
 
 ---
 
+## Global iteration requirements (apply to EVERY iteration)
+Each iteration must satisfy ALL of the following, in addition
+to its own scope:
+- unit + integration tests green,
+- `ruff check .` and `ruff format --check .` clean,
+- `import-smoke` green,
+- `e2e-smoke` green (see CONTRIBUTING.md for the exact scope),
+- README + docs/decisions.md updated,
+- no branch operations by the agent; work stays in the current
+  branch; never push to `main`.
+
+An iteration is not "done" until these are all true. Do not
+treat any of them as optional or as "later work".
+
+---
+
 ## 1. Tech stack (you choose, but respect these constraints)
 
 - Backend: any mainstream stack with a strong ORM + migrations ecosystem.

@@ -824,6 +824,13 @@ def admin_fleet_import_doc(request: Request, current_user: User = Depends(requir
     )
 
 
+@router.post("/seed-e2e")
+def trigger_e2e_seed(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    from app.seed_e2e import seed_e2e
+
+    return seed_e2e(db)
+
+
 # --- AUDIT LOG VIEWER ---
 
 
