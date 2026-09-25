@@ -131,6 +131,13 @@ def compute_available_dates(
     technicians = db.query(User).filter(User.role == UserRole.TECHNICIAN, User.is_active == True).all()
     capacity_per_tech = int(get_setting_value(db, "technician_daily_capacity", 1))
 
+    entries = (
+        db.query(WorkingCalendar)
+        .filter(WorkingCalendar.date >= window_start, WorkingCalendar.date <= window_end)
+        .all()
+    )
+    entry_map = {e.date: e for e in entries}
+
     days = []
     selectable_dates = []
     blocked_dates = []
@@ -166,16 +173,22 @@ def compute_available_dates(
         tech_load = {tech_id: count for tech_id, count in assigned_events}
         has_tech_capacity = any(tech_load.get(tech.id, 0) < capacity_per_tech for tech in technicians)
 
+        entry = entry_map.get(curr_d)
+        is_holiday = bool(entry and (entry.kind == DayKind.HOLIDAY or getattr(entry.kind, "value", str(entry.kind)) == "holiday"))
+
         disabled_reason = None
         block_code = None
         if not is_future:
             disabled_reason = "Прошедшая дата" if locale == "ru" else "Past date"
             block_code = "past"
+        elif is_holiday:
+            disabled_reason = "Праздник" if locale == "ru" else "Holiday"
+            block_code = "holiday"
         elif not is_work:
-            disabled_reason = "Выходной / Праздник" if locale == "ru" else "Weekend / Holiday"
+            disabled_reason = "Выходной" if locale == "ru" else "Weekend"
             block_code = "weekend"
         elif comp_booked:
-            disabled_reason = "Занято для этого ПК" if locale == "ru" else "Already booked for this computer"
+            disabled_reason = "Занято для этого ПК" if locale == "ru" else "Already booked"
             block_code = "booked"
         elif not has_tech_capacity:
             disabled_reason = "Нет свободных техников" if locale == "ru" else "No available technicians"

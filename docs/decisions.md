@@ -117,11 +117,11 @@ The repository integrates shell scripts for deployment and local testing:
   - Created `format_date_localized()` in `app/core/i18n.py` formatting dates with localized weekday abbreviations (`Пн`..`Вс` in `ru` vs `Mon`..`Sun` in `en`).
   - Updated `get_window_calendar_days` and `user.py` router to format dates according to the user's active locale.
 - **Issue 4 (Prohibit Weekend Selection, Single Source of Truth & Shared Date Picker Component)**:
-  - Created `compute_available_dates()` in `app/services/scheduling_service.py` returning `selectable` dates, `blocked` dates with reason codes (`weekend`, `holiday`, `booked`, `past`, `capacity_full`), and formatted day objects.
-  - Exposed `GET /api/computers/{id}/available-dates` returning JSON available date metadata.
-  - Created reusable Jinja component `app/templates/components/date_picker.html` imported across `/user/my-computers` and `/user/schedule/{id}` for both initial selection and "Изменить дату" reschedule flows.
-  - Enforced `disabled`, `aria-disabled="true"`, greyed styles, and tooltip hover reasons on non-selectable days across all pickers.
-  - Updated `validate_maintenance_date()` to validate against `compute_available_dates()` and reject non-selectable date submissions with `HTTP 422 Unprocessable Entity`.
+  - **Duplication Audit & Finding:** Investigated `/user/my-computers` in `app/templates/user_computers.html`. Block A (`window_state == 'active'`) checked `dt.is_selectable` to disable invalid days, whereas Block B (`planned_event` reschedule block) rendered `item.available_dates` without `is_selectable` checks, allowing non-working dates to be selected in the UI.
+  - **Single Source of Truth Service Function:** Created `compute_available_dates()` in `app/services/scheduling_service.py` returning `window_start`, `window_end`, `prompt_start`, ISO `selectable` dates list, `blocked` dates list with exact reason codes (`weekend`, `holiday`, `booked`, `past`, `capacity_full`), and formatted day objects.
+  - **API Endpoint:** Exposed `GET /api/computers/{id}/available-dates` in `app/routers/user.py` returning JSON date availability metadata.
+  - **Shared Client Component & Code Removal:** Created reusable Jinja component `app/templates/components/date_picker.html` exposing `render_date_picker()`. Removed the duplicate picker loop in `user_computers.html` Block B entirely, rendering both Block A and Block B through `render_date_picker()`.
+  - **UX & Defense-in-Depth Validation:** Enforced `disabled`, `aria-disabled="true"`, greyed styles, and tooltip hover titles (`"Выходной"`, `"Праздник"`, `"Уже занято"`, `"Прошедшая дата"`, `"Вне окна выбора"`) on non-selectable days across all pickers. Added JS submit handler to display server 422 responses as inline localized error alerts instead of raw JSON. Updated `validate_maintenance_date()` to validate against `compute_available_dates()`.
 - **Issue 5 (Left Sidebar Navigation Layout)**:
   - Refactored `app/templates/base.html` replacing horizontal top navigation with a fixed left sidebar (`aside#sidebar-nav`).
   - Implemented default collapsed state (`w-16`), desktop hover expansion (`w-64`), 375px mobile viewport drawer overlay with hamburger toggle, and keyboard accessibility (Escape key handler, focus rings, `aria-expanded`, `aria-label`).
