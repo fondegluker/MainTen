@@ -7,7 +7,8 @@ This repository follows a **single long-lived working-branch model** for develop
 ## Definition of Done for EVERY iteration
 
 Every iteration, without exception, must ship with:
-1. All unit and integration tests green.
+1. Before committing: run `./scripts/check.sh` and confirm it finishes with no errors.
+2. All unit and integration tests green.
 2. `ruff check .` and `ruff format --check .` clean.
 3. `import-smoke` green (all `app/` modules importable).
 4. **`e2e-smoke` green** — a real browser walks every role through every nav link, asserts no 404/500, toggles the locale, and follows a magic-link through to a working date picker.
@@ -20,10 +21,13 @@ If `e2e-smoke` is not green, the iteration is NOT done, no matter what the other
 
 ## Linting & Formatting
 
-Before committing code, format and check all Python files using `ruff`:
+Run `./scripts/check.sh` before every commit. CI runs the same sequence (without `--fix`).
 
 ```bash
-# Auto-fix lint errors and format code
+# Pre-flight check script
+./scripts/check.sh
+
+# Or run linter & formatter directly
 ruff check . --fix && ruff format .
 ```
 

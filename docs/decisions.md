@@ -137,5 +137,7 @@ The repository integrates shell scripts for deployment and local testing:
 ## Linter & Formatting Standards
 
 - Added `.pre-commit-config.yaml` hook with pinned `ruff` (`v0.3.4`) and `ruff-format`.
+- Created executable pre-flight script `scripts/check.sh` as the single local entry point running `ruff check . --fix`, `ruff format .`, `ruff check .`, `ruff format --check .`, and `pytest`.
+- Canonical import order is stdlib → third-party → first-party with blank lines between groups (enforced by `ruff` rule `I001`).
 - Adopted import strategy Option (b) in `app/routers/admin.py`: module-level `from datetime import date, datetime, timezone` at top-of-file, removing nested datetime re-imports inside function bodies.
 - CI pipeline strictly enforces both `ruff check .` AND `ruff format --check .` on every push and pull request.

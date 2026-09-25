@@ -1,6 +1,7 @@
 """Unit tests for fixed 3+3 weekday slotting grid builder cutting leading disabled prefix (Step 4)."""
 
 from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.models.models import Computer

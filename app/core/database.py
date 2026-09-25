@@ -1,6 +1,7 @@
 """Database configuration and session management for CFMS with lazy engine initialization."""
 
 from typing import Any
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 

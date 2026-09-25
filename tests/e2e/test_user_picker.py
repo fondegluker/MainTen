@@ -53,7 +53,9 @@ def test_e2e_first_rendered_cell_is_first_selectable_date():
         page.wait_for_load_state("networkidle")
 
         page.goto(f"{BASE_URL}/admin/users")
-        magic_href = page.eval_on_selector("tr:has-text('user_e2e') a[href*='magic-link']", "el => el.getAttribute('href')")
+        magic_href = page.eval_on_selector(
+            "tr:has-text('user_e2e') a[href*='magic-link']", "el => el.getAttribute('href')"
+        )
         page.goto(urljoin(BASE_URL, magic_href))
         page.click("#regenerate-btn")
         page.wait_for_timeout(500)
@@ -75,7 +77,9 @@ def test_e2e_first_rendered_cell_is_first_selectable_date():
             # Assert first visible radio input is NOT disabled (is the first selectable date)
             first_radio = picker.locator("input[type='radio']").first
             if first_radio.count() > 0:
-                assert not first_radio.is_disabled(), "First rendered radio cell must be selectable (no leading past date cells)"
+                assert not first_radio.is_disabled(), (
+                    "First rendered radio cell must be selectable (no leading past date cells)"
+                )
 
         user_ctx.close()
         browser.close()
@@ -95,7 +99,9 @@ def test_e2e_block_b_reschedule_picker_same_as_block_a():
         page.wait_for_load_state("networkidle")
 
         page.goto(f"{BASE_URL}/admin/users")
-        magic_href = page.eval_on_selector("tr:has-text('user_e2e') a[href*='magic-link']", "el => el.getAttribute('href')")
+        magic_href = page.eval_on_selector(
+            "tr:has-text('user_e2e') a[href*='magic-link']", "el => el.getAttribute('href')"
+        )
         page.goto(urljoin(BASE_URL, magic_href))
         page.click("#regenerate-btn")
         page.wait_for_timeout(500)
@@ -152,7 +158,9 @@ def test_e2e_block_b_reschedule_picker_same_as_block_a():
             error_text = inline_error.inner_text()
             assert "Выбранный день" in error_text or "выходным" in error_text or "недоступен" in error_text
 
-            assert "{" not in user_page.content() or "detail" not in user_page.content(), "Raw JSON detail was shown on page"
+            assert "{" not in user_page.content() or "detail" not in user_page.content(), (
+                "Raw JSON detail was shown on page"
+            )
 
         user_ctx.close()
         browser.close()
