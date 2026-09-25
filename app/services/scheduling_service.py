@@ -145,6 +145,10 @@ def compute_available_dates(
 
     curr_d = window_start
     while curr_d <= window_end:
+        if curr_d.weekday() == 6:  # Exclude Sunday completely
+            curr_d += timedelta(days=1)
+            continue
+
         is_work = is_working_day(curr_d, db)
         is_future = curr_d > today
 
@@ -634,5 +638,102 @@ def get_month_calendar_grid(year: int, month: int, db: Session, current_date: da
         "max_year": max_year,
         "leading_blanks": leading_blanks,
         "num_days": num_days,
+        "trailing_blanks": trailing_blanks,
+    }
+
+
+def get_date_picker_grid(
+    year: int, month: int, db: Session, locale: str = "ru", current_date: date | None = None
+) -> dict[str, Any]:
+    """Calculate 3+3 grid (6 cells per week: Row 1 = Mon/Tue/Wed, Row 2 = Thu/Fri/Sat) excluding Sunday."""
+    if current_date is None:
+        current_date = datetime.now(timezone.utc).date()
+
+    curr_year = current_date.year
+    min_year = curr_year
+    max_year = curr_year + 10
+
+    if year < min_year:
+        year = min_year
+    elif year > max_year:
+        year = max_year
+
+    if not (1 <= month <= 12):
+        month = current_date.month
+
+    from app.core.i18n import WEEK_LAYOUT, WEEKDAYS_6_EN, WEEKDAYS_6_RU, format_date_localized
+
+    _, num_days = calendar.monthrange(year, month)
+
+    month_days = []
+    for d in range(1, num_days + 1):
+        c_date = date(year, month, d)
+        if c_date.weekday() != 6:  # Skip Sunday
+            month_days.append(c_date)
+
+    if not month_days:
+        leading_blanks = 0
+    else:
+        first_mon_sat = month_days[0]
+        leading_blanks = first_mon_sat.weekday()  # 0 for Mon, 1 for Tue, ..., 5 for Sat
+
+    start_d = date(year, month, 1)
+    end_d = date(year, month, num_days)
+    entries = db.query(WorkingCalendar).filter(
+        WorkingCalendar.date >= start_d, WorkingCalendar.date <= end_d
+    ).all()
+    entry_map = {e.date: e for e in entries}
+
+    cells = []
+    for _ in range(leading_blanks):
+        cells.append(None)
+
+    for c_date in month_days:
+        entry = entry_map.get(c_date)
+        if not entry:
+            is_w = c_date.weekday() < 5
+            k = DayKind.WORKDAY if is_w else DayKind.WEEKEND
+            entry = WorkingCalendar(date=c_date, is_working=is_w, kind=k, description="", source="seed")
+
+        kind_val = entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
+        cells.append({
+            "date": c_date,
+            "date_str": c_date.isoformat(),
+            "day_number": c_date.day,
+            "formatted": format_date_localized(c_date, locale=locale),
+            "entry": entry,
+            "kind": kind_val,
+            "is_working": entry.is_working,
+            "description": entry.description or "",
+            "is_today": (c_date == current_date),
+            "is_weekend": (c_date.weekday() == 5),
+        })
+
+    total_cells = len(cells)
+    remainder = total_cells % 6
+    trailing_blanks = (6 - remainder) % 6
+    for _ in range(trailing_blanks):
+        cells.append(None)
+
+    weeks_6 = []
+    for i in range(0, len(cells), 6):
+        block = cells[i : i + 6]
+        weeks_6.append({
+            "row1": block[0:3],
+            "row2": block[3:6],
+        })
+
+    weekday_headers = WEEKDAYS_6_EN if locale == "en" else WEEKDAYS_6_RU
+
+    return {
+        "year": year,
+        "month": month,
+        "weeks": weeks_6,
+        "week_layout": WEEK_LAYOUT,
+        "header_row1": weekday_headers[0:3],
+        "header_row2": weekday_headers[3:6],
+        "num_days": num_days,
+        "visible_days_count": len(month_days),
+        "leading_blanks": leading_blanks,
         "trailing_blanks": trailing_blanks,
     }

@@ -151,6 +151,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
 from datetime import date
 
+WEEK_LAYOUT = [["mon", "tue", "wed"], ["thu", "fri", "sat"]]
+
+WEEKDAYS_6_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб"]
+WEEKDAYS_6_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
 WEEKDAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 WEEKDAYS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 

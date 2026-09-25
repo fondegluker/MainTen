@@ -1,4 +1,4 @@
-{# Single Shared Date Picker Component for CFMS #}
+{# Single Shared Date Picker Component for CFMS with 3+3 Grid (Mon-Sat, No Sunday) #}
 {% macro render_date_picker(comp_id, available_dates, mode='initial', submit_label='Выбрать эту дату', locale='ru') %}
 <form action="/user/schedule/{{ comp_id }}"
       method="POST"
@@ -7,37 +7,52 @@
       data-mode="{{ mode }}"
       data-testid="maintenance-date-picker">
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto p-1">
+    <!-- 3+3 Weekday Headers (Row 1: Mon Tue Wed / Row 2: Thu Fri Sat) -->
+    <div class="space-y-1 text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+        <div class="grid grid-cols-3 gap-3 text-center border-b pb-1">
+            <span>{% if locale == 'en' %}Mon{% else %}Пн{% endif %}</span>
+            <span>{% if locale == 'en' %}Tue{% else %}Вт{% endif %}</span>
+            <span>{% if locale == 'en' %}Wed{% else %}Ср{% endif %}</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3 text-center border-b pb-1">
+            <span>{% if locale == 'en' %}Thu{% else %}Чт{% endif %}</span>
+            <span>{% if locale == 'en' %}Fri{% else %}Пт{% endif %}</span>
+            <span>{% if locale == 'en' %}Sat{% else %}Сб{% endif %}</span>
+        </div>
+    </div>
+
+    <!-- 3-Column Grid Cells -->
+    <div class="grid grid-cols-3 gap-3 max-h-80 overflow-y-auto p-1">
         {% for dt in available_dates %}
         {% if dt.is_selectable %}
-            <label class="flex items-center p-3 bg-white border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition shadow-sm">
-                <input type="radio"
-                       name="scheduled_date_str"
-                       value="{{ dt.date_str }}"
-                       required
-                       onchange="this.form.querySelector('button[type=submit]').removeAttribute('disabled')"
-                       class="text-amber-600 focus:ring-amber-500 h-4 w-4">
-                <div class="ml-3">
-                    <span class="block font-bold text-gray-900 text-sm">{{ dt.formatted }}</span>
-                    <span class="block text-xs text-green-700 font-semibold">
-                        {% if locale == 'en' %}Available working day{% else %}Свободный рабочий день{% endif %}
-                    </span>
+            <label class="flex flex-col justify-between p-2.5 bg-white border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition shadow-xs text-center min-h-[70px]">
+                <div class="flex items-center justify-between w-full mb-1">
+                    <input type="radio"
+                           name="scheduled_date_str"
+                           value="{{ dt.date_str }}"
+                           required
+                           onchange="this.form.querySelector('button[type=submit]').removeAttribute('disabled')"
+                           class="text-amber-600 focus:ring-amber-500 h-4 w-4">
+                    <span class="text-xs font-bold text-gray-900">{{ dt.formatted }}</span>
                 </div>
+                <span class="block text-[10px] text-green-700 font-semibold leading-tight">
+                    {% if locale == 'en' %}Available{% else %}Свободен{% endif %}
+                </span>
             </label>
         {% else %}
-            <div class="flex items-center p-3 bg-gray-100 border border-gray-200 rounded-lg opacity-60 cursor-not-allowed text-gray-500 select-none"
+            <div class="flex flex-col justify-between p-2.5 bg-gray-100 border border-gray-200 rounded-lg opacity-60 cursor-not-allowed text-gray-500 select-none text-center min-h-[70px]"
                  title="{{ dt.disabled_reason }}"
                  aria-disabled="true"
                  onclick="event.preventDefault(); event.stopPropagation(); return false;">
-                <input type="radio"
-                       disabled
-                       aria-disabled="true"
-                       tabindex="-1"
-                       class="h-4 w-4 text-gray-400 cursor-not-allowed pointer-events-none">
-                <div class="ml-3">
-                    <span class="block font-medium text-gray-600 text-sm">{{ dt.formatted }}</span>
-                    <span class="block text-xs text-red-600 font-medium">{{ dt.disabled_reason }}</span>
+                <div class="flex items-center justify-between w-full mb-1">
+                    <input type="radio"
+                           disabled
+                           aria-disabled="true"
+                           tabindex="-1"
+                           class="h-4 w-4 text-gray-400 cursor-not-allowed pointer-events-none">
+                    <span class="text-xs font-medium text-gray-600">{{ dt.formatted }}</span>
                 </div>
+                <span class="block text-[10px] text-red-600 font-medium leading-tight line-clamp-1">{{ dt.disabled_reason }}</span>
             </div>
         {% endif %}
         {% endfor %}

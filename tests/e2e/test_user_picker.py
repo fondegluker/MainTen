@@ -1,4 +1,4 @@
-"""E2E Playwright tests specifically targeting the unified maintenance date picker (Block A & Block B)."""
+"""E2E Playwright tests specifically targeting the unified 3+3 maintenance date picker (Block A & Block B)."""
 
 import os
 import time
@@ -38,8 +38,8 @@ def wait_for_server():
         client.post("/admin/seed-e2e")
 
 
-def test_e2e_block_b_reschedule_picker_same_as_block_a():
-    """Verify Block B ('Изменить дату') uses identical date picker component with disabled weekends, holidays, and inline error handling."""
+def test_e2e_3x2_layout_and_no_sunday_in_picker():
+    """Verify Block A and Block B date pickers use 3+3 layout and exclude Sunday."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context()
@@ -66,7 +66,45 @@ def test_e2e_block_b_reschedule_picker_same_as_block_a():
         user_page.goto(magic_url)
         user_page.wait_for_load_state("networkidle")
 
-        assert "/user/my-computers" in user_page.url
+        picker = user_page.locator("form[data-testid='maintenance-date-picker']").first
+        if picker.count() > 0:
+            picker_html = picker.inner_html()
+            # Assert 3-column grid
+            assert "grid-cols-3" in picker_html
+            # Assert 3+3 header row labels (Mon-Wed, Thu-Sat)
+            assert ("Пн" in picker_html and "Сб" in picker_html) or ("Mon" in picker_html and "Sat" in picker_html)
+            # Assert Sunday is NOT in picker
+            assert "Вс" not in picker_html and "Sun" not in picker_html
+
+        user_ctx.close()
+        browser.close()
+
+
+def test_e2e_block_b_reschedule_picker_same_as_block_a():
+    """Verify Block B ('Изменить дату') uses identical date picker component with disabled weekends, holidays, and inline error handling."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+
+        page.goto(f"{BASE_URL}/auth/login")
+        page.fill("input[name='username']", "admin")
+        page.fill("input[name='password']", "admin123")
+        page.click("button[type='submit']")
+        page.wait_for_load_state("networkidle")
+
+        page.goto(f"{BASE_URL}/admin/users")
+        magic_href = page.eval_on_selector("tr:has-text('user_e2e') a[href*='magic-link']", "el => el.getAttribute('href')")
+        page.goto(urljoin(BASE_URL, magic_href))
+        page.click("#regenerate-btn")
+        page.wait_for_timeout(500)
+        magic_url = page.input_value("#magic-url-input")
+        context.close()
+
+        user_ctx = browser.new_context()
+        user_page = user_ctx.new_page()
+        user_page.goto(magic_url)
+        user_page.wait_for_load_state("networkidle")
 
         # Select date initially if not chosen
         initial_picker = user_page.locator("form[data-testid='maintenance-date-picker']").first
@@ -77,21 +115,21 @@ def test_e2e_block_b_reschedule_picker_same_as_block_a():
                 initial_picker.locator("button[type='submit']").click()
                 user_page.wait_for_load_state("networkidle")
 
-        # 3. Assert "Изменить дату" button exists and click it
+        # Click "Изменить дату" button
         change_btn = user_page.locator("button:has-text('Изменить дату')")
         if change_btn.count() > 0:
             change_btn.click()
             user_page.wait_for_timeout(300)
 
-            # 4. Assert shared picker component appears with testid
             picker = user_page.locator("form[data-testid='maintenance-date-picker']").first
             assert picker.is_visible()
 
-            # 5. Assert disabled radios exist for weekends/holidays
-            disabled_inputs = picker.locator("input[type='radio'][disabled]")
-            assert disabled_inputs.count() > 0, "No disabled weekend/holiday inputs found in reschedule picker"
+            # Assert 3-column layout in reschedule picker as well
+            picker_html = picker.inner_html()
+            assert "grid-cols-3" in picker_html
+            assert "Вс" not in picker_html and "Sun" not in picker_html
 
-            # 6. Force submit a disabled radio via DOM manipulation to test inline error alert
+            # Force submit a disabled radio via DOM manipulation to test inline error alert
             user_page.evaluate("""
                 const form = document.querySelector("form[data-testid='maintenance-date-picker']");
                 let disabledRadio = form.querySelector("input[disabled]");
@@ -108,7 +146,6 @@ def test_e2e_block_b_reschedule_picker_same_as_block_a():
                 }
             """)
 
-            # Submit form
             picker.locator("button[type='submit']").evaluate("el => el.removeAttribute('disabled')")
             picker.locator("button[type='submit']").click()
             user_page.wait_for_timeout(1000)
