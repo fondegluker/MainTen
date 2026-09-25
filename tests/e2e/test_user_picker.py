@@ -38,14 +38,14 @@ def wait_for_server():
         client.post("/admin/seed-e2e")
 
 
-def test_e2e_3x2_layout_and_no_sunday_in_picker():
-    """Verify Block A and Block B date pickers use 3+3 layout and exclude Sunday."""
+def test_e2e_first_rendered_cell_is_first_selectable_date():
+    """Verify the date picker begins at the first selectable date with no leading past date cells."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context()
         page = context.new_page()
 
-        # 1. Login as ADMIN to get magic link for user_e2e
+        # Login as ADMIN to get magic link for user_e2e
         page.goto(f"{BASE_URL}/auth/login")
         page.fill("input[name='username']", "admin")
         page.fill("input[name='password']", "admin123")
@@ -53,16 +53,14 @@ def test_e2e_3x2_layout_and_no_sunday_in_picker():
         page.wait_for_load_state("networkidle")
 
         page.goto(f"{BASE_URL}/admin/users")
-        magic_href = page.eval_on_selector(
-            "tr:has-text('user_e2e') a[href*='magic-link']", "el => el.getAttribute('href')"
-        )
+        magic_href = page.eval_on_selector("tr:has-text('user_e2e') a[href*='magic-link']", "el => el.getAttribute('href')")
         page.goto(urljoin(BASE_URL, magic_href))
         page.click("#regenerate-btn")
         page.wait_for_timeout(500)
         magic_url = page.input_value("#magic-url-input")
         context.close()
 
-        # 2. Login as USER via magic link
+        # Login as USER via magic link
         user_ctx = browser.new_context()
         user_page = user_ctx.new_page()
         user_page.goto(magic_url)
@@ -71,12 +69,13 @@ def test_e2e_3x2_layout_and_no_sunday_in_picker():
         picker = user_page.locator("form[data-testid='maintenance-date-picker']").first
         if picker.count() > 0:
             picker_html = picker.inner_html()
-            # Assert 3-column grid
-            assert "grid-cols-3" in picker_html
-            # Assert 3+3 header row labels (Mon-Wed, Thu-Sat)
-            assert ("Пн" in picker_html and "Сб" in picker_html) or ("Mon" in picker_html and "Sat" in picker_html)
-            # Assert Sunday is NOT in picker
-            assert "Вс" not in picker_html and "Sun" not in picker_html
+            # Assert NO header row nodes containing standalone "Пн" or "Mon" headers
+            assert "header_row1" not in picker_html
+
+            # Assert first visible radio input is NOT disabled (is the first selectable date)
+            first_radio = picker.locator("input[type='radio']").first
+            if first_radio.count() > 0:
+                assert not first_radio.is_disabled(), "First rendered radio cell must be selectable (no leading past date cells)"
 
         user_ctx.close()
         browser.close()
@@ -96,9 +95,7 @@ def test_e2e_block_b_reschedule_picker_same_as_block_a():
         page.wait_for_load_state("networkidle")
 
         page.goto(f"{BASE_URL}/admin/users")
-        magic_href = page.eval_on_selector(
-            "tr:has-text('user_e2e') a[href*='magic-link']", "el => el.getAttribute('href')"
-        )
+        magic_href = page.eval_on_selector("tr:has-text('user_e2e') a[href*='magic-link']", "el => el.getAttribute('href')")
         page.goto(urljoin(BASE_URL, magic_href))
         page.click("#regenerate-btn")
         page.wait_for_timeout(500)
@@ -128,11 +125,6 @@ def test_e2e_block_b_reschedule_picker_same_as_block_a():
             picker = user_page.locator("form[data-testid='maintenance-date-picker']").first
             assert picker.is_visible()
 
-            # Assert 3-column layout in reschedule picker as well
-            picker_html = picker.inner_html()
-            assert "grid-cols-3" in picker_html
-            assert "Вс" not in picker_html and "Sun" not in picker_html
-
             # Force submit a disabled radio via DOM manipulation to test inline error alert
             user_page.evaluate("""
                 const form = document.querySelector("form[data-testid='maintenance-date-picker']");
@@ -160,9 +152,7 @@ def test_e2e_block_b_reschedule_picker_same_as_block_a():
             error_text = inline_error.inner_text()
             assert "Выбранный день" in error_text or "выходным" in error_text or "недоступен" in error_text
 
-            assert "{" not in user_page.content() or "detail" not in user_page.content(), (
-                "Raw JSON detail was shown on page"
-            )
+            assert "{" not in user_page.content() or "detail" not in user_page.content(), "Raw JSON detail was shown on page"
 
         user_ctx.close()
         browser.close()

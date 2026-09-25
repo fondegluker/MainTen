@@ -98,13 +98,16 @@ def compute_window_bounds(trigger_date: date, db: Session) -> tuple[date, date, 
 def compute_available_dates(
     computer_id: int, db: Session, today: date | None = None, locale: str = "ru"
 ) -> dict[str, Any]:
-    """Single source of truth function for available, selectable, and blocked maintenance dates grouped in 2x3 weekday slotted weeks."""
+    """Single source of truth function for available, selectable, and blocked maintenance dates.
+    Cuts leading disabled prefix before the first selectable date while preserving 2x3 column alignment."""
     if today is None:
         today = datetime.now(timezone.utc).date()
 
-    from app.core.i18n import format_date_localized
+    from app.core.i18n import format_date_localized, translate
 
     computer = db.query(Computer).filter(Computer.id == computer_id).first()
+    no_dates_msg = translate("no_available_dates", locale)
+
     if not computer:
         return {
             "window_start": None,
@@ -115,6 +118,7 @@ def compute_available_dates(
             "weeks": [],
             "days": [],
             "has_selectable": False,
+            "message": no_dates_msg,
         }
 
     if not computer.next_maintenance_due_at:
@@ -142,13 +146,10 @@ def compute_available_dates(
     )
     entry_map = {e.date: e for e in entries}
 
+    all_window_days = []
     selectable_dates = []
     blocked_dates = []
-    days_flat = []
-    has_selectable = False
-
-    # Group window days into Monday-aligned 6-slot weeks
-    weeks_dict: dict[date, list[dict[str, Any] | None]] = {}
+    first_selectable_date = None
 
     curr_d = window_start
     while curr_d <= window_end:
@@ -156,10 +157,6 @@ def compute_available_dates(
         if w_weekday == 6:  # Skip Sunday
             curr_d += timedelta(days=1)
             continue
-
-        week_monday = curr_d - timedelta(days=w_weekday)
-        if week_monday not in weeks_dict:
-            weeks_dict[week_monday] = [None, None, None, None, None, None]
 
         is_work = is_working_day(curr_d, db)
         is_future = curr_d > today
@@ -214,51 +211,77 @@ def compute_available_dates(
         d_str = curr_d.isoformat()
 
         if is_selectable:
-            has_selectable = True
+            if first_selectable_date is None:
+                first_selectable_date = curr_d
             selectable_dates.append(d_str)
         else:
             blocked_dates.append({"date": d_str, "reason": block_code or "disabled"})
 
-        day_obj = {
-            "date": curr_d,
-            "date_str": d_str,
-            "day_number": curr_d.day,
-            "weekday_idx": w_weekday,
-            "formatted": format_date_localized(curr_d, locale=locale),
-            "is_selectable": is_selectable,
-            "disabled_reason": disabled_reason,
-        }
-
-        weeks_dict[week_monday][w_weekday] = day_obj
-        days_flat.append(day_obj)
+        all_window_days.append(
+            {
+                "date": curr_d,
+                "date_str": d_str,
+                "day_number": curr_d.day,
+                "weekday_idx": w_weekday,
+                "formatted": format_date_localized(curr_d, locale=locale),
+                "is_selectable": is_selectable,
+                "disabled_reason": disabled_reason,
+            }
+        )
 
         curr_d += timedelta(days=1)
 
-    # Build weeks list with row1 (Mon/Tue/Wed) and row2 (Thu/Fri/Sat)
+    has_selectable = len(selectable_dates) > 0
+
+    # Empty window escalation
+    if not has_selectable:
+        if today >= prompt_start_date:
+            log_audit(
+                db=db,
+                actor_user_id=None,
+                action="escalate_empty_window",
+                entity="computers",
+                entity_id=computer.id,
+                after={
+                    "message": "Selection window has no available working dates",
+                    "trigger_date": trigger_date.isoformat(),
+                    "window_start": window_start.isoformat(),
+                    "window_end": window_end.isoformat(),
+                },
+            )
+        return {
+            "window_start": window_start.isoformat(),
+            "window_end": window_end.isoformat(),
+            "prompt_start": prompt_start_date.isoformat(),
+            "selectable": [],
+            "blocked": blocked_dates,
+            "weeks": [],
+            "days": [],
+            "has_selectable": False,
+            "message": no_dates_msg,
+        }
+
+    # Cut leading days before first_selectable_date
+    visible_days = [d for d in all_window_days if d["date"] >= first_selectable_date]
+
+    # Group visible_days into Monday-aligned 6-slot weeks
+    weeks_dict: dict[date, list[dict[str, Any] | None]] = {}
+    for d_obj in visible_days:
+        c_date = d_obj["date"]
+        w_idx = d_obj["weekday_idx"]
+        week_mon = c_date - timedelta(days=w_idx)
+        if week_mon not in weeks_dict:
+            weeks_dict[week_mon] = [None, None, None, None, None, None]
+        weeks_dict[week_mon][w_idx] = d_obj
+
     weeks_list = []
-    for week_monday in sorted(weeks_dict.keys()):
-        slots = weeks_dict[week_monday]
+    for week_mon in sorted(weeks_dict.keys()):
+        slots = weeks_dict[week_mon]
         weeks_list.append(
             {
                 "row1": slots[0:3],
                 "row2": slots[3:6],
             }
-        )
-
-    # Empty window escalation
-    if not has_selectable and today >= prompt_start_date:
-        log_audit(
-            db=db,
-            actor_user_id=None,
-            action="escalate_empty_window",
-            entity="computers",
-            entity_id=computer.id,
-            after={
-                "message": "Selection window has no available working dates",
-                "trigger_date": trigger_date.isoformat(),
-                "window_start": window_start.isoformat(),
-                "window_end": window_end.isoformat(),
-            },
         )
 
     return {
@@ -268,8 +291,10 @@ def compute_available_dates(
         "selectable": selectable_dates,
         "blocked": blocked_dates,
         "weeks": weeks_list,
-        "days": days_flat,
-        "has_selectable": has_selectable,
+        "days": visible_days,
+        "has_selectable": True,
+        "first_selectable_date": first_selectable_date.isoformat(),
+        "message": None,
     }
 
 
