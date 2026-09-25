@@ -46,10 +46,20 @@
 - Served route `GET /admin/import/template` dynamically regenerates template bytes on-the-fly and returns HTTP 200 with `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` and `Content-Disposition: attachment; filename="fleet_import_template.xlsx"`.
 - Documented full specification in `docs/fleet-import-format.md` and updated `README.md`.
 
-## Dashboard 500 Hotfix & Postgres Enum Alignment
+## Enum Alignment & Canonical Representation
 
-- Resolved HTTP 500 `DataError` on `/admin/dashboard` in PostgreSQL environments caused by uppercase enum type definition (`PLANNED`, `IN_PROGRESS`, `DONE`, `MISSED`, `CANCELLED`) in initial migration versus lowercase string values (`planned`, `in_progress`, `done`, `missed`, `cancelled`) in Python ORM model.
-- Added Alembic migration `77a8b9c0d1e2_fix_enum_values.py` converting PostgreSQL `maintenanceeventstatus` enum values to match SQLAlchemy ORM string values.
+### Enum Audit Table
+
+| Python Enum Class | Member `.value` strings | Values in initial DB migration (`4573d757029f`) | Match / Differ |
+| :--- | :--- | :--- | :--- |
+| `UserRole` | `"admin"`, `"technician"`, `"user"`, `"observer"` | `"ADMIN"`, `"TECHNICIAN"`, `"USER"`, `"OBSERVER"` | **DIFFER** |
+| `MaintenanceEventStatus` | `"planned"`, `"in_progress"`, `"done"`, `"missed"`, `"cancelled"` | `"planned"`, `"in_progress"`, `"done"`, `"missed"`, `"cancelled"` | **MATCH** |
+| `DayKind` | `"workday"`, `"weekend"`, `"holiday"`, `"short_day"` | `"workday"`, `"weekend"`, `"holiday"`, `"short_day"` | **MATCH** |
+
+### Decision & Strategy
+- **Canonical Representation:** Python enum member `.value` strings in lowercase (`"admin"`, `"technician"`, `"user"`, `"observer"`).
+- **Fix Strategy:** Pre-release schema rewrite of `alembic/versions/4573d757029f_initial_schema.py` to define `userrole` enum directly with canonical lowercase values `('admin', 'technician', 'user', 'observer')`. Updated `UserRole` enum class in `app/models/models.py` to lowercase strings. Safe because no production database exists yet and CI environment executes migrations against fresh databases.
+- **Seed Migration Refactoring:** Updated `63a1b2c4d5e6_seed_default_admin.py` to use SQLAlchemy ORM session (`Session(bind=bind)`) for type-safe enum serialization and idempotent seeding.
 - Updated `app/main.py` exception handler to issue HTTP 302 redirects to `/auth/login` for unauthenticated HTML requests.
 - Added E2E Docker Compose smoke test in `.github/workflows/ci.yml` verifying live container startup, login, and `/admin/dashboard` 200 response on every push.
 

@@ -9,10 +9,10 @@ from app.core.database import Base
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "ADMIN"
-    TECHNICIAN = "TECHNICIAN"
-    USER = "USER"
-    OBSERVER = "OBSERVER"
+    ADMIN = "admin"
+    TECHNICIAN = "technician"
+    USER = "user"
+    OBSERVER = "observer"
 
 
 class MaintenanceEventStatus(str, enum.Enum):
