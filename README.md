@@ -110,7 +110,7 @@ All pull requests and branch merges must pass the following required CI checks i
   - Window expiry shift logic (`process_unselected_windows` shifts due window 30 days forward if user does not choose a date).
 - **User Maintenance Selection & Fleet History Pages**:
   - `/user/my-computers`: List of all assigned computers with metadata (hostname, IP, OS, location), 24/7 status, notification window prompt, planned event status, and full past event history with checklists. Aggregates multiple computers for "Manager" user case.
-  - `/user/schedule/{computer_id}` & `/api/computers/{id}/available-dates`: Shared 3+3 date picker component (`WEEK_LAYOUT` Mon-Wed, Thu-Sat with Sunday excluded) offering single source of truth selectable future working days (`compute_available_dates`) where technician capacity exists, rendering weekends/holidays/booked dates as disabled with hover tooltips.
+  - `/user/schedule/{computer_id}` & `/api/computers/{id}/available-dates`: Shared fixed 2x3 weekday slotted date picker component (`WEEK_LAYOUT` Mon-Wed, Thu-Sat with Sunday excluded) offering single source of truth selectable future working days (`compute_available_dates`) where technician capacity exists, rendering weekends/holidays/booked dates as disabled with hover tooltips and empty slots holding column positions.
   - Form submission creates/reschedules a `planned` `maintenance_event` assigned to an available technician, enforcing server 422 validation against non-selectable date submissions.
 
 ---

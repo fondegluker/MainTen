@@ -28,8 +28,8 @@
     <div class="bg-white p-6 border border-gray-200 rounded-xl shadow-sm space-y-6">
         <h2 class="text-lg font-bold text-gray-800">Доступные рабочие дни (свободны техники)</h2>
 
-        {% if available_dates %}
-            {{ render_date_picker(computer.id, available_dates, mode='initial', submit_label='Подтвердить выбор даты', locale=locale) }}
+        {% if window_calendar %}
+            {{ render_date_picker(computer.id, window_calendar, mode='initial', submit_label='Подтвердить выбор даты', locale=locale) }}
         {% else %}
             <div class="p-6 text-center text-gray-500">
                 К сожалению, нет доступных свободных дат в ближайший период. Обратитесь к системному администратору.

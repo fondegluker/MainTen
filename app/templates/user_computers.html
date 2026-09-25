@@ -76,8 +76,8 @@
                             <!-- Shared Reschedule Date Picker Component -->
                             <div id="edit-picker-{{ comp.id }}" class="hidden pt-4 border-t border-indigo-200 space-y-3">
                                 <h3 class="text-sm font-bold text-indigo-900">{{ translate('select_new_date', locale) }}</h3>
-                                {% if item.available_dates %}
-                                    {{ render_date_picker(comp.id, item.available_dates, mode='change', submit_label=translate('save_new_date', locale), locale=locale) }}
+                                {% if item.window_calendar %}
+                                    {{ render_date_picker(comp.id, item.window_calendar, mode='change', submit_label=translate('save_new_date', locale), locale=locale) }}
                                 {% else %}
                                     <p class="text-xs text-indigo-800 italic">{{ translate('no_available_dates', locale) }}</p>
                                 {% endif %}
@@ -95,8 +95,8 @@
                                 <span class="text-xs text-amber-800 font-semibold">{{ translate('due_by', locale) }} {{ item.due_date.strftime('%d.%m.%Y') }}</span>
                             </div>
 
-                            {% if item.available_dates %}
-                                {{ render_date_picker(comp.id, item.available_dates, mode='initial', submit_label=translate('select_this_date', locale), locale=locale) }}
+                            {% if item.window_calendar %}
+                                {{ render_date_picker(comp.id, item.window_calendar, mode='initial', submit_label=translate('select_this_date', locale), locale=locale) }}
                             {% else %}
                                 <p class="text-xs text-amber-900 italic">{{ translate('no_available_dates', locale) }}</p>
                             {% endif %}

@@ -207,7 +207,7 @@ def schedule_date_picker_page(
         return RedirectResponse(url="/user/my-computers?error=Доступ+запрещен", status_code=status.HTTP_302_FOUND)
 
     active_locale = get_locale(request, current_user.locale)
-    available_dates = compute_available_dates(computer.id, db, locale=active_locale)["days"]
+    window_calendar = compute_available_dates(computer.id, db, locale=active_locale)
 
     planned_event = (
         db.query(MaintenanceEvent)
@@ -222,7 +222,8 @@ def schedule_date_picker_page(
             current_user,
             {
                 "computer": computer,
-                "available_dates": available_dates,
+                "window_calendar": window_calendar,
+                "available_dates": window_calendar["days"],
                 "planned_event": planned_event,
                 "error": error,
             },

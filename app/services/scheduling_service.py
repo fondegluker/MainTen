@@ -98,7 +98,7 @@ def compute_window_bounds(trigger_date: date, db: Session) -> tuple[date, date, 
 def compute_available_dates(
     computer_id: int, db: Session, today: date | None = None, locale: str = "ru"
 ) -> dict[str, Any]:
-    """Single source of truth function for available, selectable, and blocked maintenance dates."""
+    """Single source of truth function for available, selectable, and blocked maintenance dates grouped in 2x3 weekday slotted weeks."""
     if today is None:
         today = datetime.now(timezone.utc).date()
 
@@ -112,6 +112,7 @@ def compute_available_dates(
             "prompt_start": None,
             "selectable": [],
             "blocked": [],
+            "weeks": [],
             "days": [],
             "has_selectable": False,
         }
@@ -133,26 +134,33 @@ def compute_available_dates(
 
     entries = (
         db.query(WorkingCalendar)
-        .filter(WorkingCalendar.date >= window_start, WorkingCalendar.date <= window_end)
+        .filter(WorkingCalendar.date >= window_start - timedelta(days=7), WorkingCalendar.date <= window_end + timedelta(days=7))
         .all()
     )
     entry_map = {e.date: e for e in entries}
 
-    days = []
     selectable_dates = []
     blocked_dates = []
+    days_flat = []
     has_selectable = False
+
+    # Group window days into Monday-aligned 6-slot weeks
+    weeks_dict: dict[date, list[dict[str, Any] | None]] = {}
 
     curr_d = window_start
     while curr_d <= window_end:
-        if curr_d.weekday() == 6:  # Exclude Sunday completely
+        w_weekday = curr_d.weekday()
+        if w_weekday == 6:  # Skip Sunday
             curr_d += timedelta(days=1)
             continue
+
+        week_monday = curr_d - timedelta(days=w_weekday)
+        if week_monday not in weeks_dict:
+            weeks_dict[week_monday] = [None, None, None, None, None, None]
 
         is_work = is_working_day(curr_d, db)
         is_future = curr_d > today
 
-        # Check if same computer is booked
         comp_booked = (
             db.query(MaintenanceEvent)
             .filter(
@@ -164,7 +172,6 @@ def compute_available_dates(
             is not None
         )
 
-        # Check technician capacity
         assigned_events = (
             db.query(MaintenanceEvent.technician_id, func.count(MaintenanceEvent.id).label("event_count"))
             .filter(
@@ -207,16 +214,29 @@ def compute_available_dates(
         else:
             blocked_dates.append({"date": d_str, "reason": block_code or "disabled"})
 
-        days.append(
-            {
-                "date": curr_d,
-                "date_str": d_str,
-                "formatted": format_date_localized(curr_d, locale=locale),
-                "is_selectable": is_selectable,
-                "disabled_reason": disabled_reason,
-            }
-        )
+        day_obj = {
+            "date": curr_d,
+            "date_str": d_str,
+            "day_number": curr_d.day,
+            "weekday_idx": w_weekday,
+            "formatted": format_date_localized(curr_d, locale=locale),
+            "is_selectable": is_selectable,
+            "disabled_reason": disabled_reason,
+        }
+
+        weeks_dict[week_monday][w_weekday] = day_obj
+        days_flat.append(day_obj)
+
         curr_d += timedelta(days=1)
+
+    # Build weeks list with row1 (Mon/Tue/Wed) and row2 (Thu/Fri/Sat)
+    weeks_list = []
+    for week_monday in sorted(weeks_dict.keys()):
+        slots = weeks_dict[week_monday]
+        weeks_list.append({
+            "row1": slots[0:3],
+            "row2": slots[3:6],
+        })
 
     # Empty window escalation
     if not has_selectable and today >= prompt_start_date:
@@ -240,7 +260,8 @@ def compute_available_dates(
         "prompt_start": prompt_start_date.isoformat(),
         "selectable": selectable_dates,
         "blocked": blocked_dates,
-        "days": days,
+        "weeks": weeks_list,
+        "days": days_flat,
         "has_selectable": has_selectable,
     }
 
