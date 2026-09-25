@@ -16,7 +16,6 @@ from app.services.scheduling_service import (
     compute_available_dates,
     compute_next_maintenance_due_at,
     compute_window_bounds,
-    get_available_dates,
     get_window_calendar_days,
     schedule_maintenance,
     validate_maintenance_date,

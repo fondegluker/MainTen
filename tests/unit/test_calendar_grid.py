@@ -1,6 +1,7 @@
 """Unit tests for Monday-first calendar grid builder (Issue 1)."""
 
 from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.services.scheduling_service import get_month_calendar_grid

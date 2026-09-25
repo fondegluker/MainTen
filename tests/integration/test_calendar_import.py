@@ -1,6 +1,5 @@
 """Integration tests for bulk calendar import template routes and importer validation (Issue 2)."""
 
-import json
 from fastapi import status
 from fastapi.testclient import TestClient
 

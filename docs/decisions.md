@@ -126,3 +126,9 @@ The repository integrates shell scripts for deployment and local testing:
 - **Issue 5 (Left Sidebar Navigation Layout)**:
   - Refactored `app/templates/base.html` replacing horizontal top navigation with a fixed left sidebar (`aside#sidebar-nav`).
   - Implemented default collapsed state (`w-16`), desktop hover expansion (`w-64`), 375px mobile viewport drawer overlay with hamburger toggle, and keyboard accessibility (Escape key handler, focus rings, `aria-expanded`, `aria-label`).
+
+## Linter & Formatting Standards
+
+- Added `.pre-commit-config.yaml` hook with pinned `ruff` (`v0.3.4`) and `ruff-format`.
+- Adopted import strategy Option (b) in `app/routers/admin.py`: module-level `from datetime import date, datetime, timezone` at top-of-file, removing nested datetime re-imports inside function bodies.
+- CI pipeline strictly enforces both `ruff check .` AND `ruff format --check .` on every push and pull request.

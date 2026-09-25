@@ -1,6 +1,7 @@
 """Global Pytest fixtures for unit, integration, and E2E tests."""
 
 import os
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

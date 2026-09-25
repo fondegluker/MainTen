@@ -18,6 +18,25 @@ If `e2e-smoke` is not green, the iteration is NOT done, no matter what the other
 
 ---
 
+## Linting & Formatting
+
+Before committing code, format and check all Python files using `ruff`:
+
+```bash
+# Auto-fix lint errors and format code
+ruff check . --fix && ruff format .
+```
+
+To automatically run linter checks on `git commit`, install pre-commit:
+
+```bash
+pip install pre-commit && pre-commit install
+```
+
+CI automatically runs `ruff check .` and `ruff format --check .` on every push and pull request. PRs with linting or formatting errors will be rejected by CI.
+
+---
+
 ## How to run e2e locally
 
 To run the end-to-end smoke test suite locally:

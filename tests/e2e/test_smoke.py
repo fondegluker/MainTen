@@ -106,7 +106,9 @@ def test_e2e_all_roles_nav_links_and_forbidden_status():
             page.wait_for_load_state("networkidle")
 
             # Extract nav links present on page
-            nav_hrefs = page.eval_on_selector_all("aside#sidebar-nav a", "elements => elements.map(e => e.getAttribute('href'))")
+            nav_hrefs = page.eval_on_selector_all(
+                "aside#sidebar-nav a", "elements => elements.map(e => e.getAttribute('href'))"
+            )
             clean_hrefs = [
                 h
                 for h in nav_hrefs
@@ -218,7 +220,16 @@ def test_e2e_issue3_datepicker_locale_weekday_names():
 
         content_ru = page.content()
         # Verify Russian weekday name or headers present
-        assert "Пн" in content_ru or "Вт" in content_ru or "Ср" in content_ru or "Чт" in content_ru or "Пт" in content_ru or "Сб" in content_ru or "Вс" in content_ru or "Выберите дату" in content_ru
+        assert (
+            "Пн" in content_ru
+            or "Вт" in content_ru
+            or "Ср" in content_ru
+            or "Чт" in content_ru
+            or "Пт" in content_ru
+            or "Сб" in content_ru
+            or "Вс" in content_ru
+            or "Выберите дату" in content_ru
+        )
 
         # Set locale EN
         page.goto(f"{BASE_URL}/set-locale?locale=en")
@@ -226,7 +237,16 @@ def test_e2e_issue3_datepicker_locale_weekday_names():
         page.wait_for_load_state("networkidle")
 
         content_en = page.content()
-        assert "Select maintenance date" in content_en or "Mon" in content_en or "Tue" in content_en or "Wed" in content_en or "Thu" in content_en or "Fri" in content_en or "Sat" in content_en or "Sun" in content_en
+        assert (
+            "Select maintenance date" in content_en
+            or "Mon" in content_en
+            or "Tue" in content_en
+            or "Wed" in content_en
+            or "Thu" in content_en
+            or "Fri" in content_en
+            or "Sat" in content_en
+            or "Sun" in content_en
+        )
 
         context.close()
         browser.close()
@@ -248,7 +268,7 @@ def test_e2e_issue4_weekend_rejection_422():
         # Submit Saturday date directly via API
         response = page.request.post(
             f"{BASE_URL}/user/schedule/1",
-            form={"scheduled_date_str": "2025-05-03"}  # Saturday
+            form={"scheduled_date_str": "2025-05-03"},  # Saturday
         )
         assert response.status == 422
 

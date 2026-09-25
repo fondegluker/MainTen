@@ -1,12 +1,13 @@
 """Unit and integration tests for compute_available_dates, date selection rules, and API endpoint."""
 
 from datetime import date, datetime, timezone
+
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.auth.tokens import create_access_token
-from app.models.models import Computer, MaintenanceEvent, MaintenanceEventStatus, User, UserRole
+from app.models.models import Computer, MaintenanceEvent, MaintenanceEventStatus, User
 from app.services.scheduling_service import compute_available_dates, validate_maintenance_date
 
 
@@ -84,16 +85,12 @@ def test_validate_maintenance_date_rejects_weekends_and_past(db_session: Session
     today_ref = date(2025, 5, 1)
 
     # 1. Past date
-    is_valid_past, msg_past = validate_maintenance_date(
-        comp.id, date(2025, 4, 30), db_session, today=today_ref
-    )
+    is_valid_past, msg_past = validate_maintenance_date(comp.id, date(2025, 4, 30), db_session, today=today_ref)
     assert not is_valid_past
     assert "будущую" in msg_past
 
     # 2. Weekend date (2025-05-03 is Saturday)
-    is_valid_sat, msg_sat = validate_maintenance_date(
-        comp.id, date(2025, 5, 3), db_session, today=today_ref
-    )
+    is_valid_sat, msg_sat = validate_maintenance_date(comp.id, date(2025, 5, 3), db_session, today=today_ref)
     assert not is_valid_sat
     assert "выходным" in msg_sat or "праздничным" in msg_sat
 

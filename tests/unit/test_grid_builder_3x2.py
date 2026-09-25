@@ -1,6 +1,7 @@
 """Unit tests for fixed 3+3 weekday slotting grid builder excluding Sunday (Step 4)."""
 
 from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.services.scheduling_service import compute_available_dates, get_date_picker_grid

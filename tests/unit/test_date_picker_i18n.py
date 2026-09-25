@@ -1,6 +1,7 @@
 """Unit tests for localized weekday and date picker formatting (Issue 3)."""
 
 from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.core.i18n import format_date_localized
@@ -36,5 +37,7 @@ def test_window_calendar_days_i18n_formatting(db_session: Session, regular_user)
     assert not any("(Mon)" in d["formatted"] or "(Fri)" in d["formatted"] for d in ru_res["days"])
 
     en_res = get_window_calendar_days(comp.id, db_session, today=date(2025, 5, 1), locale="en")
-    assert any("(Mon)" in d["formatted"] or "(Tue)" in d["formatted"] or "(Fri)" in d["formatted"] for d in en_res["days"])
+    assert any(
+        "(Mon)" in d["formatted"] or "(Tue)" in d["formatted"] or "(Fri)" in d["formatted"] for d in en_res["days"]
+    )
     assert not any("(Пн)" in d["formatted"] or "(Пт)" in d["formatted"] for d in en_res["days"])

@@ -560,8 +560,6 @@ def create_computer(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    from datetime import date, datetime, timezone
-
     parsed_last_maint = None
     if last_maintenance_at and last_maintenance_at.strip():
         try:
@@ -709,7 +707,7 @@ def update_computer(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    from datetime import date, datetime, timezone
+    from datetime import datetime, timezone
 
     parsed_last_maint = None
     if last_maintenance_at and last_maintenance_at.strip():
@@ -1259,14 +1257,34 @@ def calendar_editor_page(
     if locale_str == "en":
         weekday_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         month_names = [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
         ]
     else:
         weekday_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
         month_names = [
-            "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-            "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+            "Январь",
+            "Февраль",
+            "Март",
+            "Апрель",
+            "Май",
+            "Июнь",
+            "Июль",
+            "Август",
+            "Сентябрь",
+            "Октябрь",
+            "Ноябрь",
+            "Декабрь",
         ]
 
     month_name = month_names[grid["month"] - 1]

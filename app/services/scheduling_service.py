@@ -134,7 +134,10 @@ def compute_available_dates(
 
     entries = (
         db.query(WorkingCalendar)
-        .filter(WorkingCalendar.date >= window_start - timedelta(days=7), WorkingCalendar.date <= window_end + timedelta(days=7))
+        .filter(
+            WorkingCalendar.date >= window_start - timedelta(days=7),
+            WorkingCalendar.date <= window_end + timedelta(days=7),
+        )
         .all()
     )
     entry_map = {e.date: e for e in entries}
@@ -185,7 +188,9 @@ def compute_available_dates(
         has_tech_capacity = any(tech_load.get(tech.id, 0) < capacity_per_tech for tech in technicians)
 
         entry = entry_map.get(curr_d)
-        is_holiday = bool(entry and (entry.kind == DayKind.HOLIDAY or getattr(entry.kind, "value", str(entry.kind)) == "holiday"))
+        is_holiday = bool(
+            entry and (entry.kind == DayKind.HOLIDAY or getattr(entry.kind, "value", str(entry.kind)) == "holiday")
+        )
 
         disabled_reason = None
         block_code = None
@@ -233,10 +238,12 @@ def compute_available_dates(
     weeks_list = []
     for week_monday in sorted(weeks_dict.keys()):
         slots = weeks_dict[week_monday]
-        weeks_list.append({
-            "row1": slots[0:3],
-            "row2": slots[3:6],
-        })
+        weeks_list.append(
+            {
+                "row1": slots[0:3],
+                "row2": slots[3:6],
+            }
+        )
 
     # Empty window escalation
     if not has_selectable and today >= prompt_start_date:
@@ -266,7 +273,9 @@ def compute_available_dates(
     }
 
 
-def get_window_calendar_days(computer_id: int, db: Session, today: date | None = None, locale: str = "ru") -> dict[str, Any]:
+def get_window_calendar_days(
+    computer_id: int, db: Session, today: date | None = None, locale: str = "ru"
+) -> dict[str, Any]:
     """Wrapper returning compute_available_dates for calendar template rendering."""
     return compute_available_dates(computer_id, db, today=today, locale=locale)
 
@@ -596,9 +605,7 @@ def get_month_calendar_grid(year: int, month: int, db: Session, current_date: da
 
     start_d = date(year, month, 1)
     end_d = date(year, month, num_days)
-    entries = db.query(WorkingCalendar).filter(
-        WorkingCalendar.date >= start_d, WorkingCalendar.date <= end_d
-    ).all()
+    entries = db.query(WorkingCalendar).filter(WorkingCalendar.date >= start_d, WorkingCalendar.date <= end_d).all()
     entry_map = {e.date: e for e in entries}
 
     days_cells = []
@@ -614,16 +621,18 @@ def get_month_calendar_grid(year: int, month: int, db: Session, current_date: da
             entry = WorkingCalendar(date=c_date, is_working=is_w, kind=k, description="", source="seed")
 
         kind_val = entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
-        days_cells.append({
-            "date": c_date,
-            "day_number": d,
-            "entry": entry,
-            "kind": kind_val,
-            "is_working": entry.is_working,
-            "description": entry.description or "",
-            "is_today": (c_date == current_date),
-            "is_weekend": (c_date.weekday() >= 5),
-        })
+        days_cells.append(
+            {
+                "date": c_date,
+                "day_number": d,
+                "entry": entry,
+                "kind": kind_val,
+                "is_working": entry.is_working,
+                "description": entry.description or "",
+                "is_today": (c_date == current_date),
+                "is_weekend": (c_date.weekday() >= 5),
+            }
+        )
 
     total_cells = len(days_cells)
     remainder = total_cells % 7
@@ -700,9 +709,7 @@ def get_date_picker_grid(
 
     start_d = date(year, month, 1)
     end_d = date(year, month, num_days)
-    entries = db.query(WorkingCalendar).filter(
-        WorkingCalendar.date >= start_d, WorkingCalendar.date <= end_d
-    ).all()
+    entries = db.query(WorkingCalendar).filter(WorkingCalendar.date >= start_d, WorkingCalendar.date <= end_d).all()
     entry_map = {e.date: e for e in entries}
 
     cells = []
@@ -717,18 +724,20 @@ def get_date_picker_grid(
             entry = WorkingCalendar(date=c_date, is_working=is_w, kind=k, description="", source="seed")
 
         kind_val = entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
-        cells.append({
-            "date": c_date,
-            "date_str": c_date.isoformat(),
-            "day_number": c_date.day,
-            "formatted": format_date_localized(c_date, locale=locale),
-            "entry": entry,
-            "kind": kind_val,
-            "is_working": entry.is_working,
-            "description": entry.description or "",
-            "is_today": (c_date == current_date),
-            "is_weekend": (c_date.weekday() == 5),
-        })
+        cells.append(
+            {
+                "date": c_date,
+                "date_str": c_date.isoformat(),
+                "day_number": c_date.day,
+                "formatted": format_date_localized(c_date, locale=locale),
+                "entry": entry,
+                "kind": kind_val,
+                "is_working": entry.is_working,
+                "description": entry.description or "",
+                "is_today": (c_date == current_date),
+                "is_weekend": (c_date.weekday() == 5),
+            }
+        )
 
     total_cells = len(cells)
     remainder = total_cells % 6
@@ -739,10 +748,12 @@ def get_date_picker_grid(
     weeks_6 = []
     for i in range(0, len(cells), 6):
         block = cells[i : i + 6]
-        weeks_6.append({
-            "row1": block[0:3],
-            "row2": block[3:6],
-        })
+        weeks_6.append(
+            {
+                "row1": block[0:3],
+                "row2": block[3:6],
+            }
+        )
 
     weekday_headers = WEEKDAYS_6_EN if locale == "en" else WEEKDAYS_6_RU
 
