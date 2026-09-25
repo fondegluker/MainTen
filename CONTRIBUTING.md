@@ -105,10 +105,10 @@ Stop after all required checks are green and post a summary.
 
 All commits pushed to the working branch must pass the following required CI checks in GitHub Actions:
 
-- **`Run Import Smoke Check` (`import-smoke`)**: Executes `pytest tests/test_import_smoke.py -x -q` to verify every module under `app/` imports without error and no Python reserved keywords (like `import`) are used as package or module names.
+- **`Run Import Smoke Check` (`import-smoke`)**: Installs base `requirements.txt` (including runtime `psycopg[binary]`) and executes `pytest tests/unit/test_import_smoke.py -x -q` to verify every module under `app/` imports cleanly without database connection requirements or reserved keyword syntax conflicts.
 - **`Run Ruff Linter & Format Check` (`lint` / `format`)**: Executes `ruff check .` and `ruff format --check .`.
-- **`Run Pytest Test Suite` (`tests`)**: Executes `pytest` with `--import-mode=importlib`.
-- **`Run E2E Playwright Smoke Suite` (`e2e-smoke`)**: Executes `pytest tests/e2e/ -x -q` against the running web application stack.
+- **`Run Pytest Test Suite` (`tests`)**: Installs base `requirements.txt` and executes `pytest` with `--import-mode=importlib`.
+- **`Run E2E Playwright Smoke Suite` (`e2e-smoke`)**: Installs `requirements.txt` and `requirements-e2e.txt` and executes `pytest -m e2e tests/e2e/ -x -q` against the running web application stack.
 
 ---
 

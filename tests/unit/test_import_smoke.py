@@ -3,6 +3,7 @@
 import importlib
 import keyword
 import pkgutil
+import sys
 import traceback
 from pathlib import Path
 
@@ -67,3 +68,38 @@ def test_single_source_of_truth_schema_constant_sharing():
     assert FLEET_IMPORT_COLUMNS is TEMPLATE_COLUMNS, (
         "app.importer.template must import FLEET_IMPORT_COLUMNS from app.importer.schema, not redefine it"
     )
+
+
+def test_import_database_without_drivers_and_no_top_level_engine(monkeypatch):
+    """Regression test: importing app.core.database and app.main with drivers mocked out raises no errors."""
+    monkeypatch.setitem(sys.modules, "psycopg", None)
+    monkeypatch.setitem(sys.modules, "psycopg2", None)
+
+    import app.core.database as db_mod
+
+    importlib.reload(db_mod)
+
+    assert not hasattr(db_mod, "engine"), "app.core.database must not have a top-level engine attribute"
+
+    import app.main
+
+    importlib.reload(app.main)
+
+
+def test_get_engine_lazy_path_with_sqlite(monkeypatch):
+    """Test get_engine() lazily creates and caches a working SQLAlchemy engine."""
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+
+    from app.core import database as db_mod
+
+    # Reset cached engine for testing
+    db_mod._engine = None
+
+    engine = db_mod.get_engine()
+    assert engine is not None
+
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT 1")).scalar()
+        assert res == 1

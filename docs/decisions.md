@@ -127,6 +127,12 @@ The repository integrates shell scripts for deployment and local testing:
   - Refactored `app/templates/base.html` replacing horizontal top navigation with a fixed left sidebar (`aside#sidebar-nav`).
   - Implemented default collapsed state (`w-16`), desktop hover expansion (`w-64`), 375px mobile viewport drawer overlay with hamburger toggle, and keyboard accessibility (Escape key handler, focus rings, `aria-expanded`, `aria-label`).
 
+## Lazy Database Engine & Runtime Driver Dependency
+
+- **Lazy Engine Initialization:** Refactored `app/core/database.py` so `create_engine` and `sessionmaker` are lazily initialized via `get_engine()`, `get_session_factory()`, and `SessionLocal()`. Importing `app.core.database` or `app.main` does not create an engine or attempt database driver calls at module import time.
+- **Runtime Dependency:** Added `psycopg[binary]>=3.1.18` to base `requirements.txt` as a core runtime requirement for PostgreSQL database connectivity.
+- **CI Resiliency:** The `import-smoke` CI job installs `requirements.txt` and executes without requiring a live PostgreSQL database connection.
+
 ## Linter & Formatting Standards
 
 - Added `.pre-commit-config.yaml` hook with pinned `ruff` (`v0.3.4`) and `ruff-format`.
