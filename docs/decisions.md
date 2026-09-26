@@ -67,6 +67,27 @@
 - Updated `app/main.py` exception handler to issue HTTP 302 redirects to `/auth/login` for unauthenticated HTML requests.
 - Added E2E Docker Compose smoke test in `.github/workflows/ci.yml` verifying live container startup, login, and `/admin/dashboard` 200 response on every push.
 
+## Mandatory pre-flight check (`scripts/check.sh`)
+**Date:** 2026-09-22
+**Status:** Accepted
+
+### Context
+Repeated CI failures on trivial, auto-fixable issues (ruff I001/F401/F841, ImportError in tests, alembic enum mismatch) that could have been caught locally before push.
+
+### Decision
+Introduce `scripts/check.sh` (executable) as the single mandatory pre-flight script. It runs, in order, stopping on first failure:
+    ruff check . --fix
+    ruff format .
+    ruff check .
+    ruff format --check .
+    pytest
+    pytest tests/unit/test_import_smoke.py -x -q
+
+### Consequences
+- An iteration is NOT done until `./scripts/check.sh` exits with code 0.
+- The standard iteration prompt requires the agent to run it and paste the last 20 lines of output in the final summary.
+- Enforced via CONTRIBUTING.md (Definition of Done) and docs/requirements.md (Global iteration requirements).
+
 ## Reconciliation & Requirement Verification (Step 0 Audit)
 
 An audit was conducted against `docs/requirements.md` §1–§3 and §9 Iteration 1 to ensure full compliance before beginning Iteration 2:

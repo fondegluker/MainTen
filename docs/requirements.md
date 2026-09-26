@@ -15,6 +15,11 @@ Never mix more than one iteration into a single commit/PR.
 ## Global iteration requirements (apply to EVERY iteration)
 Each iteration must satisfy ALL of the following, in addition
 to its own scope:
+- Before committing and before marking the task complete,
+  run `./scripts/check.sh` and confirm it exits with code 0.
+  Paste the last 20 lines of its output in the final summary.
+  The task is NOT complete until this is done. Do not mark
+  the task done if the script reports any errors.
 - unit + integration tests green,
 - `ruff check .` and `ruff format --check .` clean,
 - `import-smoke` green,

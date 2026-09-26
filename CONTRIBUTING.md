@@ -7,7 +7,7 @@ This repository follows a **single long-lived working-branch model** for develop
 ## Definition of Done for EVERY iteration
 
 Every iteration, without exception, must ship with:
-1. Before committing: run `./scripts/check.sh` and confirm it finishes with no errors (exit code 0).
+1. Before committing and before marking the task complete, run `./scripts/check.sh` and confirm it exits with code 0. Paste the last 20 lines of its output in the final summary. The task is NOT complete until this is done. Do not mark the task done if the script reports any errors.
 2. All unit and integration tests green.
 3. `ruff check .` and `ruff format --check .` clean.
 3. `import-smoke` green (all `app/` modules importable).
@@ -69,6 +69,12 @@ Read docs/requirements.md and CONTRIBUTING.md.
 Implement Iteration <N> ONLY.
 
 Global iteration requirements (see CONTRIBUTING.md) apply:
+
+    Before committing and before marking the task complete,
+    run `./scripts/check.sh` and confirm it exits with code 0.
+    Paste the last 20 lines of its output in the final summary.
+    The task is NOT complete until this is done. Do not mark
+    the task done if the script reports any errors.
 
     unit + integration tests green,
 
