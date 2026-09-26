@@ -9,28 +9,18 @@ from app.services.scheduling_service import compute_available_dates, get_date_pi
 
 
 def test_grid_builder_fixed_weekday_slots_and_no_sunday(db_session: Session):
-    """Test get_date_picker_grid places days strictly into their matching weekday columns."""
+    """Test get_date_picker_grid places days strictly into their matching weekday columns (Mon..Sat = slots 0..5)."""
     grid = get_date_picker_grid(2025, 5, db_session, locale="ru", current_date=date(2025, 1, 1))
 
     for week in grid["weeks"]:
-        assert len(week["row1"]) == 3
-        assert len(week["row2"]) == 3
+        assert len(week["slots"]) == 6
 
-        # Row 1: Mon (slot 0), Tue (slot 1), Wed (slot 2)
-        if week["row1"][0] is not None:
-            assert week["row1"][0]["date"].weekday() == 0
-        if week["row1"][1] is not None:
-            assert week["row1"][1]["date"].weekday() == 1
-        if week["row1"][2] is not None:
-            assert week["row1"][2]["date"].weekday() == 2
-
-        # Row 2: Thu (slot 0), Fri (slot 1), Sat (slot 2)
-        if week["row2"][0] is not None:
-            assert week["row2"][0]["date"].weekday() == 3
-        if week["row2"][1] is not None:
-            assert week["row2"][1]["date"].weekday() == 4
-        if week["row2"][2] is not None:
-            assert week["row2"][2]["date"].weekday() == 5
+        for idx in range(6):
+            cell = week["slots"][idx]
+            if cell is not None:
+                assert cell["date"].weekday() == idx
+                assert "formatted_short" in cell
+                assert cell["formatted_short"] == cell["date"].strftime("%d.%m")
 
 
 def test_cut_leading_disabled_prefix(db_session: Session, regular_user):
@@ -57,7 +47,7 @@ def test_cut_leading_disabled_prefix(db_session: Session, regular_user):
 
     # Check first week structure
     first_week = data["weeks"][0]
-    first_mon_cell = first_week["row1"][0]
+    first_mon_cell = first_week["slots"][0]
     # Monday of May 2nd's week is April 28th (past, before first_selectable) -> None
     assert first_mon_cell is None
 
@@ -81,10 +71,10 @@ def test_first_selectable_tuesday_empty_monday_placeholder(db_session: Session, 
     assert first_selectable == date(2025, 5, 6)  # Tuesday May 6
 
     first_week = data["weeks"][0]
-    # Row 1 Col 1 (Monday) is None, Row 1 Col 2 (Tuesday May 6) is present
-    assert first_week["row1"][0] is None
-    assert first_week["row1"][1] is not None
-    assert first_week["row1"][1]["date"] == date(2025, 5, 6)
+    # Slot 0 (Monday) is None, Slot 1 (Tuesday May 6) is present
+    assert first_week["slots"][0] is None
+    assert first_week["slots"][1] is not None
+    assert first_week["slots"][1]["date"] == date(2025, 5, 6)
 
 
 def test_middle_disabled_day_remains_visible(db_session: Session, regular_user):

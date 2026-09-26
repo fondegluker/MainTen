@@ -1,4 +1,4 @@
-{# Single Shared Date Picker Component for CFMS with Fixed 2x3 Weekday Slotting #}
+{# Single Shared Date Picker Component for CFMS with 6-Column Weekday Slotting (Mon..Sat) #}
 {% macro render_date_picker(comp_id, picker_data, mode='initial', submit_label='Выбрать эту дату', locale='ru') %}
 {% set weeks = picker_data.weeks if (picker_data is mapping and picker_data.weeks) else [] %}
 {% set dates_list = picker_data.days if (picker_data is mapping and picker_data.days) else (picker_data if picker_data is iterable and picker_data is not string else []) %}
@@ -20,84 +20,35 @@
         <div class="space-y-3 max-h-96 overflow-y-auto p-1">
             {% if weeks %}
                 {% for week in weeks %}
-                    <div class="space-y-2 p-2 bg-gray-50/60 rounded-xl border border-gray-200/60">
-                        <!-- Row 1: Mon (Col 1), Tue (Col 2), Wed (Col 3) -->
-                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
-                            {% for cell in week.row1 %}
+                    <div class="p-2 bg-gray-50/60 rounded-xl border border-gray-200/60">
+                        <!-- 6-Column Grid: Mon (Col 1) .. Sat (Col 6) -->
+                        <div class="grid grid-cols-6 gap-1.5">
+                            {% set week_slots = week.slots if week.slots else (week.row1 + week.row2) %}
+                            {% for cell in week_slots %}
                             {% if cell is none %}
-                                <div class="empty-slot border border-dashed border-gray-200 bg-gray-100/40 rounded-lg min-h-[68px] flex items-center justify-center">
-                                    <span class="text-xs text-gray-300">&mdash;</span>
+                                <div class="empty-slot border border-dashed border-gray-200 bg-gray-100/40 rounded-lg min-h-[58px] flex items-center justify-center">
+                                    <span class="text-[10px] text-gray-300">&mdash;</span>
                                 </div>
                             {% elif cell.is_selectable %}
-                                <label class="flex flex-col justify-between p-2 bg-white border border-amber-300 rounded-lg cursor-pointer hover:bg-amber-100 transition shadow-xs text-center min-h-[68px]">
-                                    <div class="flex items-center justify-between w-full mb-1">
-                                        <input type="radio"
-                                               name="scheduled_date_str"
-                                               value="{{ cell.date_str }}"
-                                               required
-                                               onchange="this.form.querySelector('button[type=submit]').removeAttribute('disabled')"
-                                               class="text-amber-600 focus:ring-amber-500 h-4 w-4">
-                                        <span class="text-xs font-bold text-gray-900">{{ cell.formatted }}</span>
-                                    </div>
-                                    <span class="block text-[10px] text-green-700 font-semibold leading-tight">
+                                <label class="flex flex-col items-center justify-center p-1.5 bg-white border border-amber-300 rounded-lg cursor-pointer hover:bg-amber-100 transition shadow-2xs text-center min-h-[58px]">
+                                    <input type="radio"
+                                           name="scheduled_date_str"
+                                           value="{{ cell.date_str }}"
+                                           required
+                                           onchange="this.form.querySelector('button[type=submit]').removeAttribute('disabled')"
+                                           class="text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 mb-1">
+                                    <span class="text-xs font-bold text-gray-900 leading-none mb-1">{{ cell.formatted_short or cell.formatted }}</span>
+                                    <span class="text-[9px] text-green-700 font-semibold leading-tight">
                                         {% if locale == 'en' %}Available{% else %}Свободен{% endif %}
                                     </span>
                                 </label>
                             {% else %}
-                                <div class="flex flex-col justify-between p-2 bg-gray-100 border border-gray-200 rounded-lg opacity-60 cursor-not-allowed text-gray-500 select-none text-center min-h-[68px]"
+                                <div class="flex flex-col items-center justify-center p-1.5 bg-gray-100 border border-gray-200 rounded-lg opacity-60 cursor-not-allowed text-gray-500 select-none text-center min-h-[58px]"
                                      title="{{ cell.disabled_reason }}"
                                      aria-disabled="true"
                                      onclick="event.preventDefault(); event.stopPropagation(); return false;">
-                                    <div class="flex items-center justify-between w-full mb-1">
-                                        <input type="radio"
-                                               disabled
-                                               aria-disabled="true"
-                                               tabindex="-1"
-                                               class="h-4 w-4 text-gray-400 cursor-not-allowed pointer-events-none">
-                                        <span class="text-xs font-medium text-gray-600">{{ cell.formatted }}</span>
-                                    </div>
-                                    <span class="block text-[10px] text-red-600 font-medium leading-tight line-clamp-1">{{ cell.disabled_reason }}</span>
-                                </div>
-                            {% endif %}
-                            {% endfor %}
-                        </div>
-
-                        <!-- Row 2: Thu (Col 1), Fri (Col 2), Sat (Col 3) -->
-                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
-                            {% for cell in week.row2 %}
-                            {% if cell is none %}
-                                <div class="empty-slot border border-dashed border-gray-200 bg-gray-100/40 rounded-lg min-h-[68px] flex items-center justify-center">
-                                    <span class="text-xs text-gray-300">&mdash;</span>
-                                </div>
-                            {% elif cell.is_selectable %}
-                                <label class="flex flex-col justify-between p-2 bg-white border border-amber-300 rounded-lg cursor-pointer hover:bg-amber-100 transition shadow-xs text-center min-h-[68px]">
-                                    <div class="flex items-center justify-between w-full mb-1">
-                                        <input type="radio"
-                                               name="scheduled_date_str"
-                                               value="{{ cell.date_str }}"
-                                               required
-                                               onchange="this.form.querySelector('button[type=submit]').removeAttribute('disabled')"
-                                               class="text-amber-600 focus:ring-amber-500 h-4 w-4">
-                                        <span class="text-xs font-bold text-gray-900">{{ cell.formatted }}</span>
-                                    </div>
-                                    <span class="block text-[10px] text-green-700 font-semibold leading-tight">
-                                        {% if locale == 'en' %}Available{% else %}Свободен{% endif %}
-                                    </span>
-                                </label>
-                            {% else %}
-                                <div class="flex flex-col justify-between p-2 bg-gray-100 border border-gray-200 rounded-lg opacity-60 cursor-not-allowed text-gray-500 select-none text-center min-h-[68px]"
-                                     title="{{ cell.disabled_reason }}"
-                                     aria-disabled="true"
-                                     onclick="event.preventDefault(); event.stopPropagation(); return false;">
-                                    <div class="flex items-center justify-between w-full mb-1">
-                                        <input type="radio"
-                                               disabled
-                                               aria-disabled="true"
-                                               tabindex="-1"
-                                               class="h-4 w-4 text-gray-400 cursor-not-allowed pointer-events-none">
-                                        <span class="text-xs font-medium text-gray-600">{{ cell.formatted }}</span>
-                                    </div>
-                                    <span class="block text-[10px] text-red-600 font-medium leading-tight line-clamp-1">{{ cell.disabled_reason }}</span>
+                                    <span class="text-xs font-medium text-gray-600 leading-none mb-1">{{ cell.formatted_short or cell.formatted }}</span>
+                                    <span class="text-[9px] text-red-600 font-medium leading-tight line-clamp-1 truncate max-w-full px-0.5">{{ cell.disabled_reason }}</span>
                                 </div>
                             {% endif %}
                             {% endfor %}

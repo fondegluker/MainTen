@@ -224,6 +224,7 @@ def compute_available_dates(
                 "day_number": curr_d.day,
                 "weekday_idx": w_weekday,
                 "formatted": format_date_localized(curr_d, locale=locale),
+                "formatted_short": curr_d.strftime("%d.%m"),
                 "is_selectable": is_selectable,
                 "disabled_reason": disabled_reason,
             }
@@ -279,6 +280,7 @@ def compute_available_dates(
         slots = weeks_dict[week_mon]
         weeks_list.append(
             {
+                "slots": slots,
                 "row1": slots[0:3],
                 "row2": slots[3:6],
             }
@@ -755,6 +757,7 @@ def get_date_picker_grid(
                 "date_str": c_date.isoformat(),
                 "day_number": c_date.day,
                 "formatted": format_date_localized(c_date, locale=locale),
+                "formatted_short": c_date.strftime("%d.%m"),
                 "entry": entry,
                 "kind": kind_val,
                 "is_working": entry.is_working,
@@ -775,6 +778,7 @@ def get_date_picker_grid(
         block = cells[i : i + 6]
         weeks_6.append(
             {
+                "slots": block,
                 "row1": block[0:3],
                 "row2": block[3:6],
             }
