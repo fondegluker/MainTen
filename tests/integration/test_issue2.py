@@ -115,9 +115,10 @@ def test_calendar_date_disabling_and_empty_window_escalation(db_session: Session
     res = get_window_calendar_days(comp.id, db_session, today=today)
     days_dict = {d["date"]: d for d in res["days"]}
 
-    # Past date (2026-09-10) is disabled
-    assert not days_dict[date(2026, 9, 10)]["is_selectable"]
-    assert days_dict[date(2026, 9, 10)]["disabled_reason"] == "Прошедшая дата"
+    # Past date (2026-09-10) is cut from visible days list and recorded in blocked list with reason='past'
+    past_blocked = [b for b in res["blocked"] if b["date"] == "2026-09-10"]
+    assert len(past_blocked) == 1
+    assert past_blocked[0]["reason"] == "past"
 
     # Weekend (2026-09-19) is disabled
     assert not days_dict[date(2026, 9, 19)]["is_selectable"]

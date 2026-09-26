@@ -1,4 +1,3 @@
-import os
 from datetime import date
 
 import pytest
@@ -6,16 +5,19 @@ from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from alembic import command
-
-TEST_DB_URL = "sqlite:///./test_calendar.db"
-os.environ["DATABASE_URL"] = TEST_DB_URL
-
 from app.models.models import DayKind, WorkingCalendar
 from app.repositories.calendar_repository import CalendarRepository
 
-engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+TEST_DB_URL = "sqlite:///:memory:"
+
+engine = create_engine(
+    TEST_DB_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -29,8 +31,6 @@ def alembic_db():
     yield
     # Run migration downgrade
     command.downgrade(alembic_cfg, "base")
-    if os.path.exists("./test_calendar.db"):
-        os.remove("./test_calendar.db")
 
 
 @pytest.fixture
