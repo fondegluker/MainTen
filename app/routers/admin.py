@@ -145,7 +145,8 @@ def create_user(
     provider = LocalAuthProvider()
     hashed = provider.hash_password(password) if password else None
 
-    user_role = UserRole(role) if role in [r.value for r in UserRole] else UserRole.USER
+    role_clean = role.strip().lower() if role else "user"
+    user_role = UserRole(role_clean) if role_clean in [r.value for r in UserRole] else UserRole.USER
     new_user = User(
         username=username.strip(),
         email_or_login=email_or_login.strip(),
@@ -216,8 +217,9 @@ def update_user(
         provider = LocalAuthProvider()
         user.password_hash = provider.hash_password(password.strip())
 
-    if role in [r.value for r in UserRole]:
-        user.role = UserRole(role)
+    role_clean = role.strip().lower() if role else "user"
+    if role_clean in [r.value for r in UserRole]:
+        user.role = UserRole(role_clean)
     user.is_active = bool(is_active)
 
     db.commit()

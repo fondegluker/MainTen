@@ -134,6 +134,53 @@ def test_user_crud_and_password_reset(admin_client, db_session):
     assert audit is not None
 
 
+def test_user_role_update_persistence(admin_client, db_session):
+    # Create user as USER
+    provider = LocalAuthProvider()
+    target_user = User(
+        username="role_change_user",
+        email_or_login="role_change@cfms.local",
+        password_hash=provider.hash_password("password123"),
+        role=UserRole.USER,
+        is_active=True,
+    )
+    db_session.add(target_user)
+    db_session.commit()
+    db_session.refresh(target_user)
+
+    # Edit user role to TECHNICIAN
+    resp = admin_client.post(
+        f"/admin/users/{target_user.id}/edit",
+        data={
+            "username": "role_change_user",
+            "email_or_login": "role_change@cfms.local",
+            "role": "technician",
+            "is_active": "true",
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+
+    db_session.refresh(target_user)
+    assert target_user.role == UserRole.TECHNICIAN
+
+    # Edit user role to ADMIN
+    resp_admin = admin_client.post(
+        f"/admin/users/{target_user.id}/edit",
+        data={
+            "username": "role_change_user",
+            "email_or_login": "role_change@cfms.local",
+            "role": "ADMIN",
+            "is_active": "true",
+        },
+        follow_redirects=True,
+    )
+    assert resp_admin.status_code == 200
+
+    db_session.refresh(target_user)
+    assert target_user.role == UserRole.ADMIN
+
+
 def test_computer_validation_errors(admin_client):
     # Bad IP address
     resp = admin_client.post(
