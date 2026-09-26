@@ -37,7 +37,7 @@ To automatically run linter checks on `git commit`, install pre-commit:
 pip install pre-commit && pre-commit install
 ```
 
-CI automatically runs `ruff check .` and `ruff format --check .` on every push and pull request. PRs with linting or formatting errors will be rejected by CI.
+CI automatically runs `ruff check .` and `ruff format --check .` on every push and pull request. PRs with linting or formatting errors will be rejected by CI. Note: ruff rule BLE001 (blind Exception catch) is strictly enforced; any `# noqa: BLE001` override requires explicit justification.
 
 ---
 

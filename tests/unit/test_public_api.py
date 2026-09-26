@@ -25,7 +25,7 @@ def test_all_test_imports_exist_in_app_modules():
                 if module_name and (module_name == "app" or module_name.startswith("app.")):
                     try:
                         mod = importlib.import_module(module_name)
-                    except Exception as exc:
+                    except (ImportError, ModuleNotFoundError, AttributeError) as exc:
                         missing_symbols.append(
                             f"[{test_path}:{node.lineno}] Failed to import module '{module_name}': {exc}"
                         )
@@ -40,8 +40,8 @@ def test_all_test_imports_exist_in_app_modules():
                                 f"[{test_path}:{node.lineno}] Symbol '{symbol_name}' not found in module '{module_name}'"
                             )
 
-    assert not missing_symbols, (
-        "Found missing imported symbols in test files:\n" + "\n".join(f"  - {err}" for err in missing_symbols)
+    assert not missing_symbols, "Found missing imported symbols in test files:\n" + "\n".join(
+        f"  - {err}" for err in missing_symbols
     )
 
 
@@ -58,5 +58,5 @@ def test_all_app_modules_import_cleanly():
 
         try:
             importlib.import_module(mod_path)
-        except Exception as exc:
+        except (ImportError, ModuleNotFoundError, AttributeError) as exc:
             raise AssertionError(f"Failed to import app module '{mod_path}' ({filepath}): {exc}") from exc

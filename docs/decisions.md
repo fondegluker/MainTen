@@ -88,6 +88,12 @@ Introduce `scripts/check.sh` (executable) as the single mandatory pre-flight scr
 - The standard iteration prompt requires the agent to run it and paste the last 20 lines of output in the final summary.
 - Enforced via CONTRIBUTING.md (Definition of Done) and docs/requirements.md (Global iteration requirements).
 
+## BLE001 policy in tests
+**Status:** Accepted
+**Context:** ruff BLE001 flagged a blind `except Exception` in `tests/unit/test_public_api.py`.
+**Decision:** Use Option A — narrow exceptions to `(ImportError, ModuleNotFoundError, AttributeError)`.
+**Consequences:** Unexpected runtime exceptions in test execution propagate and fail loudly; only import failures are collected. No bare `# noqa` used.
+
 ## Reconciliation & Requirement Verification (Step 0 Audit)
 
 An audit was conducted against `docs/requirements.md` §1–§3 and §9 Iteration 1 to ensure full compliance before beginning Iteration 2:
