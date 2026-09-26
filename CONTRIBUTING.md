@@ -7,9 +7,9 @@ This repository follows a **single long-lived working-branch model** for develop
 ## Definition of Done for EVERY iteration
 
 Every iteration, without exception, must ship with:
-1. Before committing: run `./scripts/check.sh` and confirm it finishes with no errors.
+1. Before committing: run `./scripts/check.sh` and confirm it finishes with no errors (exit code 0).
 2. All unit and integration tests green.
-2. `ruff check .` and `ruff format --check .` clean.
+3. `ruff check .` and `ruff format --check .` clean.
 3. `import-smoke` green (all `app/` modules importable).
 4. **`e2e-smoke` green** — a real browser walks every role through every nav link, asserts no 404/500, toggles the locale, and follows a magic-link through to a working date picker.
 5. README and `docs/decisions.md` updated.

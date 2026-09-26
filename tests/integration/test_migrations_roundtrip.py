@@ -17,15 +17,25 @@ def alembic_config():
     return config
 
 
-def test_alembic_migrations_roundtrip_and_admin_seed(alembic_config):
-    # 1. Upgrade to head
-    upgrade(alembic_config, "head")
+from alembic.runtime.migration import MigrationContext
 
-    # Verify head revision
+
+def test_alembic_migrations_roundtrip_and_admin_seed(alembic_config):
+    engine = create_engine(settings.DATABASE_URL)
     script = ScriptDirectory.from_config(alembic_config)
     head_revision = script.get_current_head()
 
-    engine = create_engine(settings.DATABASE_URL)
+    # 1. Upgrade to head
+    upgrade(alembic_config, "head")
+
+    with engine.connect() as conn:
+        ctx = MigrationContext.configure(conn)
+        current_rev = ctx.get_current_revision()
+
+    assert current_rev == head_revision, (
+        f"After `alembic upgrade head` the current revision is {current_rev!r}, expected head {head_revision!r}"
+    )
+
     with Session(bind=engine) as session:
         admin_user = session.query(User).filter(User.username == "admin").one_or_none()
         assert admin_user is not None, "Admin user was not seeded by migration"
@@ -38,6 +48,14 @@ def test_alembic_migrations_roundtrip_and_admin_seed(alembic_config):
 
     # 3. Upgrade to head again (verifying idempotency and migration clean roundtrip)
     upgrade(alembic_config, "head")
+
+    with engine.connect() as conn:
+        ctx = MigrationContext.configure(conn)
+        current_rev = ctx.get_current_revision()
+
+    assert current_rev == head_revision, (
+        f"After roundtrip `alembic upgrade head` the current revision is {current_rev!r}, expected head {head_revision!r}"
+    )
 
     with Session(bind=engine) as session:
         admin_user = session.query(User).filter(User.username == "admin").one_or_none()

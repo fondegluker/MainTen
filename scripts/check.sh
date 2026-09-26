@@ -23,3 +23,4 @@ $RUFF_CMD format .
 $RUFF_CMD check .
 $RUFF_CMD format --check .
 $PYTEST_CMD
+$PYTEST_CMD tests/unit/test_import_smoke.py -x -q

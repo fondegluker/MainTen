@@ -60,6 +60,8 @@
 - **Canonical Representation:** Python enum member `.value` strings in lowercase (`"admin"`, `"technician"`, `"user"`, `"observer"`).
 - **Fix Strategy:** Pre-release schema rewrite of `alembic/versions/4573d757029f_initial_schema.py` to define `userrole` enum directly with canonical lowercase values `('admin', 'technician', 'user', 'observer')`. Updated `UserRole` enum class in `app/models/models.py` to lowercase strings. Safe because no production database exists yet and CI environment executes migrations against fresh databases.
 - **Seed Migration Refactoring:** Updated `63a1b2c4d5e6_seed_default_admin.py` to use SQLAlchemy ORM session (`Session(bind=bind)`) for type-safe enum serialization and idempotent seeding.
+- **Migration Roundtrip Assertions (Option 2A):** Updated `tests/integration/test_migrations_roundtrip.py` with explicit `MigrationContext.configure(conn).get_current_revision()` assertions against `head_revision` after initial upgrade and roundtrip re-upgrade.
+- **Canonical Pre-Commit Entrypoint (`scripts/check.sh`):** Established `scripts/check.sh` as the mandatory pre-commit test/linter check running `ruff check . --fix`, `ruff format .`, `ruff check .`, `ruff format --check .`, `pytest`, and `pytest tests/unit/test_import_smoke.py -x -q` sequentially.
 - Updated `app/main.py` exception handler to issue HTTP 302 redirects to `/auth/login` for unauthenticated HTML requests.
 - Added E2E Docker Compose smoke test in `.github/workflows/ci.yml` verifying live container startup, login, and `/admin/dashboard` 200 response on every push.
 
