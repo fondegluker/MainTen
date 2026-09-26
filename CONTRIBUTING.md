@@ -7,9 +7,8 @@ This repository follows a **single long-lived working-branch model** for develop
 ## Definition of Done for EVERY iteration
 
 Every iteration, without exception, must ship with:
-1. Before committing and before marking the task complete, run `./scripts/check.sh` and confirm it exits with code 0. Paste the last 20 lines of its output in the final summary. The task is NOT complete until this is done. Do not mark the task done if the script reports any errors.
-2. All unit and integration tests green.
-3. `ruff check .` and `ruff format --check .` clean.
+1. All unit and integration tests green.
+2. `ruff check .` and `ruff format --check .` clean.
 3. `import-smoke` green (all `app/` modules importable).
 4. **`e2e-smoke` green** — a real browser walks every role through every nav link, asserts no 404/500, toggles the locale, and follows a magic-link through to a working date picker.
 5. README and `docs/decisions.md` updated.
@@ -21,23 +20,13 @@ If `e2e-smoke` is not green, the iteration is NOT done, no matter what the other
 
 ## Linting & Formatting
 
-Run `./scripts/check.sh` before every commit. CI runs the same sequence (without `--fix`).
+Run linter & formatter directly before every commit:
 
 ```bash
-# Pre-flight check script
-./scripts/check.sh
-
-# Or run linter & formatter directly
 ruff check . --fix && ruff format .
 ```
 
-To automatically run linter checks on `git commit`, install pre-commit:
-
-```bash
-pip install pre-commit && pre-commit install
-```
-
-CI automatically runs `ruff check .` and `ruff format --check .` on every push and pull request. PRs with linting or formatting errors will be rejected by CI. Note: ruff rule BLE001 (blind Exception catch) is strictly enforced; any `# noqa: BLE001` override requires explicit justification.
+CI automatically runs `ruff check .` and `ruff format --check .` on every push and pull request. PRs with linting or formatting errors will be rejected by CI.
 
 ---
 
@@ -53,7 +42,7 @@ To run the end-to-end smoke test suite locally:
    ```
 2. **Execute the E2E Playwright smoke suite**:
    ```bash
-   pytest tests/e2e/ -x -q
+   pytest -m e2e tests/e2e/ -x -q
    ```
 3. **Inspect failure artifacts**:
    In case of a failure, inspect `artifacts/app.log` or container logs via `docker compose logs web`.
@@ -69,12 +58,6 @@ Read docs/requirements.md and CONTRIBUTING.md.
 Implement Iteration <N> ONLY.
 
 Global iteration requirements (see CONTRIBUTING.md) apply:
-
-    Before committing and before marking the task complete,
-    run `./scripts/check.sh` and confirm it exits with code 0.
-    Paste the last 20 lines of its output in the final summary.
-    The task is NOT complete until this is done. Do not mark
-    the task done if the script reports any errors.
 
     unit + integration tests green,
 

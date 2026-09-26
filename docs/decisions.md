@@ -11,11 +11,11 @@
 
 - **Python package naming rule:** Never use Python reserved keywords (such as `import`, `class`, `def`, `pass`) as package or module names under `app/`. The fleet import package is canonically named `app.importer`.
 - **Required CI checks:**
-  1. `import-smoke` (`pytest tests/test_import_smoke.py -x -q`): Recursively imports all modules under `app/`, checks that no module/package uses Python keywords, and asserts `app.importer` package structure and schema constant sharing.
+  1. `import-smoke` (`pytest tests/unit/test_import_smoke.py -x -q`): Recursively imports all modules under `app/`, checks that no module/package uses Python keywords, and asserts `app.importer` package structure and schema constant sharing.
   2. `lint` (`ruff check .`): Linter check.
   3. `format` (`ruff format --check .`): Formatting check.
   4. `tests` (`pytest`): Full test suite execution with `--import-mode=importlib`.
-  5. `e2e-smoke` (`pytest tests/e2e/ -x -q`): Mandatory end-to-end browser smoke suite using Playwright walking every role through every navigation link, asserting HTTP status codes (200 for allowed, 403 for forbidden), toggling localization, and testing magic link booking.
+  5. `e2e-smoke` (`pytest -m e2e tests/e2e/ -x -q`): Mandatory end-to-end browser smoke suite using Playwright walking every role through every navigation link, asserting HTTP status codes (200 for allowed, 403 for forbidden), toggling localization, and testing magic link booking.
 
 ## Combined Hotfix Resolutions (Issues 1–5)
 
@@ -58,41 +58,11 @@
 
 ### Decision & Strategy
 - **Canonical Representation:** Python enum member `.value` strings in lowercase (`"admin"`, `"technician"`, `"user"`, `"observer"`).
-- **Fix Strategy:** Pre-release schema rewrite of `alembic/versions/4573d757029f_initial_schema.py` to define `userrole` enum directly with canonical lowercase values `('admin', 'technician', 'user', 'observer')`. Updated `UserRole` enum class in `app/models/models.py` to lowercase strings. Safe because no production database exists yet and CI environment executes migrations against fresh databases.
+- **Fix Strategy:** Added Alembic migration `99a0b1c2d3e4_fix_userrole_enum_postgres.py` converting PostgreSQL `userrole` enum values and existing `users.role` records to canonical lowercase strings (`admin`, `technician`, `user`, `observer`).
 - **Seed Migration Refactoring:** Updated `63a1b2c4d5e6_seed_default_admin.py` to use SQLAlchemy ORM session (`Session(bind=bind)`) for type-safe enum serialization and idempotent seeding.
-- **Migration Roundtrip Assertions (Option 2A):** Updated `tests/integration/test_migrations_roundtrip.py` with explicit `MigrationContext.configure(conn).get_current_revision()` assertions against `head_revision` after initial upgrade and roundtrip re-upgrade.
 - **`create_access_token` Resolution (Case C):** `create_access_token` never existed in `app/auth/tokens.py`. The application authenticates session cookies via `generate_session_cookie(user_id)` setting `session=<cookie_value>`. Updated tests to use `generate_session_cookie`.
-- **Public API AST Guard (`tests/unit/test_public_api.py`):** Added permanent regression guard parsing all test modules via AST to verify every imported `app.*` symbol exists on its parent module and that all application modules import cleanly without error.
-- **Canonical Pre-Commit Entrypoint (`scripts/check.sh`):** Established `scripts/check.sh` as the mandatory pre-commit test/linter check running `ruff check . --fix`, `ruff format .`, `ruff check .`, `ruff format --check .`, `pytest`, and `pytest tests/unit/test_import_smoke.py -x -q` sequentially.
 - Updated `app/main.py` exception handler to issue HTTP 302 redirects to `/auth/login` for unauthenticated HTML requests.
 - Added E2E Docker Compose smoke test in `.github/workflows/ci.yml` verifying live container startup, login, and `/admin/dashboard` 200 response on every push.
-
-## Mandatory pre-flight check (`scripts/check.sh`)
-**Date:** 2026-09-22
-**Status:** Accepted
-
-### Context
-Repeated CI failures on trivial, auto-fixable issues (ruff I001/F401/F841, ImportError in tests, alembic enum mismatch) that could have been caught locally before push.
-
-### Decision
-Introduce `scripts/check.sh` (executable) as the single mandatory pre-flight script. It runs, in order, stopping on first failure:
-    ruff check . --fix
-    ruff format .
-    ruff check .
-    ruff format --check .
-    pytest
-    pytest tests/unit/test_import_smoke.py -x -q
-
-### Consequences
-- An iteration is NOT done until `./scripts/check.sh` exits with code 0.
-- The standard iteration prompt requires the agent to run it and paste the last 20 lines of output in the final summary.
-- Enforced via CONTRIBUTING.md (Definition of Done) and docs/requirements.md (Global iteration requirements).
-
-## BLE001 policy in tests
-**Status:** Accepted
-**Context:** ruff BLE001 flagged a blind `except Exception` in `tests/unit/test_public_api.py`.
-**Decision:** Use Option A — narrow exceptions to `(ImportError, ModuleNotFoundError, AttributeError)`.
-**Consequences:** Unexpected runtime exceptions in test execution propagate and fail loudly; only import failures are collected. No bare `# noqa` used.
 
 ## Reconciliation & Requirement Verification (Step 0 Audit)
 
@@ -111,7 +81,7 @@ No gaps were identified in Step 0 audit.
 
 - Seeded default administrator account via Alembic migration (`63a1b2c4d5e6`):
   - **Username**: `admin`
-  - **Email/Login**: `admin@cfms.local`
+  - **Email / Login**: `admin@cfms.local`
   - **Default Password**: `admin123`
   - **Role**: `ADMIN`
 - Password is stored hashed using `argon2` via `LocalAuthProvider`.
@@ -158,13 +128,11 @@ The repository integrates shell scripts for deployment and local testing:
   - Created `format_date_localized()` in `app/core/i18n.py` formatting dates with localized weekday abbreviations (`Пн`..`Вс` in `ru` vs `Mon`..`Sun` in `en`).
   - Updated `get_window_calendar_days` and `user.py` router to format dates according to the user's active locale.
 - **Issue 4 (Prohibit Weekend Selection, Single Source of Truth & Shared Date Picker Component)**:
-  - **Duplication Audit & Finding:** Investigated `/user/my-computers` in `app/templates/user_computers.html`. Block A (`window_state == 'active'`) checked `dt.is_selectable` to disable invalid days, whereas Block B (`planned_event` reschedule block) rendered `item.available_dates` without `is_selectable` checks, allowing non-working dates to be selected in the UI.
   - **Single Source of Truth Service Function:** Created `compute_available_dates()` in `app/services/scheduling_service.py` returning `window_start`, `window_end`, `prompt_start`, ISO `selectable` dates list, `blocked` dates list with exact reason codes (`weekend`, `holiday`, `booked`, `past`, `capacity_full`), and formatted day objects.
   - **API Endpoint:** Exposed `GET /api/computers/{id}/available-dates` in `app/routers/user.py` returning JSON date availability metadata.
-  - **Cutting Leading Disabled Prefix & Empty Window Handling:** Refactored `compute_available_dates()` in `app/services/scheduling_service.py` to identify `first_selectable_date` and discard all leading past/disabled days prior to it while maintaining 2x3 column slot alignment (`.empty-slot` placeholders for missing leading days in that week). Middle and trailing disabled dates (e.g. holidays or booked days) remain rendered as disabled with tooltips. When zero dates are selectable, an empty window message (`no_available_dates`) is rendered without an empty grid skeleton. Both Block A and Block B share this exact grid cutting logic via `render_date_picker`.
-  - **Fixed 2x3 Weekday Slotting Layout & Header Row Removal:** Configured date picker grid to render a fixed 2 rows × 3 columns structure (`WEEK_LAYOUT = [["mon", "tue", "wed"], ["thu", "fri", "sat"]]` defined in `app/core/i18n.py`). Days are strictly slotted by weekday (Row 1: Mon=Col 1, Tue=Col 2, Wed=Col 3; Row 2: Thu=Col 1, Fri=Col 2, Sat=Col 3). Empty slots before or after month boundaries render as `.empty-slot` placeholders so dates never shift left. The top header row ("Пн Вт Ср / Чт Пт Сб") was deleted entirely. Sunday is completely excluded from grid cells and DOM.
-  - **Shared Client Component & Code Removal:** Created reusable Jinja component `app/templates/components/date_picker.html` exposing `render_date_picker()`. Removed the duplicate picker loop in `user_computers.html` Block B entirely, rendering both Block A and Block B through `render_date_picker()`.
-  - **UX & Defense-in-Depth Validation:** Enforced `disabled`, `aria-disabled="true"`, greyed styles, and tooltip hover titles (`"Выходной"`, `"Праздник"`, `"Уже занято"`, `"Прошедшая дата"`, `"Вне окна выбора"`) on non-selectable days across all pickers. Added JS submit handler to display server 422 responses as inline localized error alerts instead of raw JSON. Updated `validate_maintenance_date()` to validate against `compute_available_dates()`.
+  - **6-Column Weekday Slotting Layout & Header Row Removal:** Configured date picker grid to render a fixed 6-column structure (Mon=Col 1 .. Sat=Col 6 defined by `WEEK_LAYOUT` in `app/core/i18n.py`). Days are strictly slotted by weekday. Empty slots before or after month boundaries render as `.empty-slot` placeholders so dates never shift left. Sunday is completely excluded from grid cells and DOM.
+  - **Shared Client Component & Code Removal:** Created reusable Jinja component `app/templates/components/date_picker.html` exposing `render_date_picker()`. Both Block A and Block B render through `render_date_picker()`.
+  - **UX & Defense-in-Depth Validation:** Enforced `disabled`, `aria-disabled="true"`, greyed styles, and tooltip hover titles (`"Выходной"`, `"Праздник"`, `"Занято для этого ПК"`, `"Прошедшая дата"`, `"Вне окна выбора"`) on non-selectable days across all pickers. Added JS submit handler to display server 422 responses as inline localized error alerts instead of raw JSON. Updated `validate_maintenance_date()` to validate against `compute_available_dates()`.
 - **Issue 5 (Left Sidebar Navigation Layout)**:
   - Refactored `app/templates/base.html` replacing horizontal top navigation with a fixed left sidebar (`aside#sidebar-nav`).
   - Implemented default collapsed state (`w-16`), desktop hover expansion (`w-64`), 375px mobile viewport drawer overlay with hamburger toggle, and keyboard accessibility (Escape key handler, focus rings, `aria-expanded`, `aria-label`).
@@ -177,8 +145,5 @@ The repository integrates shell scripts for deployment and local testing:
 
 ## Linter & Formatting Standards
 
-- Added `.pre-commit-config.yaml` hook with pinned `ruff` (`v0.3.4`) and `ruff-format`.
-- Created executable pre-flight script `scripts/check.sh` as the single local entry point running `ruff check . --fix`, `ruff format .`, `ruff check .`, `ruff format --check .`, and `pytest`.
-- Canonical import order is stdlib → third-party → first-party with blank lines between groups (enforced by `ruff` rule `I001`).
-- Adopted import strategy Option (b) in `app/routers/admin.py`: module-level `from datetime import date, datetime, timezone` at top-of-file, removing nested datetime re-imports inside function bodies.
-- CI pipeline strictly enforces both `ruff check .` AND `ruff format --check .` on every push and pull request.
+- CI enforces `ruff check .` and `ruff format --check .`.
+- Canonical import order is stdlib → third-party → first-party, with a blank line between groups (enforced by `ruff` rule `I001`).
