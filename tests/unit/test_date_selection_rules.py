@@ -6,7 +6,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.auth.tokens import create_access_token
+from app.auth.tokens import generate_session_cookie
 from app.models.models import Computer, MaintenanceEvent, MaintenanceEventStatus, User
 from app.services.scheduling_service import compute_available_dates, validate_maintenance_date
 
@@ -106,8 +106,8 @@ def test_server_rejects_weekend_submission_with_422(client: TestClient, db_sessi
     db_session.add(comp)
     db_session.commit()
 
-    token = create_access_token({"sub": str(regular_user.id)})
-    headers = {"Cookie": f"access_token={token}"}
+    cookie_val = generate_session_cookie(regular_user.id)
+    headers = {"Cookie": f"session={cookie_val}"}
 
     # Attempt to submit 2025-05-03 (Saturday)
     res = client.post(
@@ -132,8 +132,8 @@ def test_api_available_dates_endpoint(client: TestClient, db_session: Session, r
     db_session.add(comp)
     db_session.commit()
 
-    token = create_access_token({"sub": str(regular_user.id)})
-    headers = {"Cookie": f"access_token={token}"}
+    cookie_val = generate_session_cookie(regular_user.id)
+    headers = {"Cookie": f"session={cookie_val}"}
 
     res = client.get(f"/api/computers/{comp.id}/available-dates", headers=headers)
     assert res.status_code == status.HTTP_200_OK

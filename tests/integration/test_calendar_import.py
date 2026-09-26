@@ -3,13 +3,13 @@
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from app.auth.tokens import create_access_token
+from app.auth.tokens import generate_session_cookie
 
 
 def test_download_calendar_templates_as_admin(client: TestClient, admin_user):
     """Test downloading CSV and JSON calendar import templates as ADMIN returns 200 and non-empty content."""
-    token = create_access_token({"sub": str(admin_user.id)})
-    headers = {"Cookie": f"access_token={token}"}
+    cookie_val = generate_session_cookie(admin_user.id)
+    headers = {"Cookie": f"session={cookie_val}"}
 
     # CSV template
     res_csv = client.get("/admin/calendar/import/template.csv", headers=headers)
@@ -32,8 +32,8 @@ def test_download_calendar_templates_as_admin(client: TestClient, admin_user):
 
 def test_bulk_import_parsed_templates_zero_errors(client: TestClient, admin_user):
     """Test uploading generated templates to bulk-import endpoint succeeds with zero errors."""
-    token = create_access_token({"sub": str(admin_user.id)})
-    headers = {"Cookie": f"access_token={token}"}
+    cookie_val = generate_session_cookie(admin_user.id)
+    headers = {"Cookie": f"session={cookie_val}"}
 
     # Download CSV template
     res_csv = client.get("/admin/calendar/import/template.csv", headers=headers)
@@ -52,8 +52,8 @@ def test_bulk_import_parsed_templates_zero_errors(client: TestClient, admin_user
 
 def test_download_calendar_templates_as_non_admin(client: TestClient, regular_user):
     """Test downloading calendar import templates as non-admin (USER) returns 403 Forbidden."""
-    token = create_access_token({"sub": str(regular_user.id)})
-    headers = {"Cookie": f"access_token={token}"}
+    cookie_val = generate_session_cookie(regular_user.id)
+    headers = {"Cookie": f"session={cookie_val}"}
 
     res_csv = client.get("/admin/calendar/import/template.csv", headers=headers)
     assert res_csv.status_code == status.HTTP_403_FORBIDDEN
