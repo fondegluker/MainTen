@@ -86,9 +86,11 @@
 
             <!-- Action Controls (Start / Missed Reason / Edit Mode Toggle) -->
             <div class="flex flex-wrap items-center gap-2">
-                {% set can_edit = (current_user.role.value in ['admin', 'ADMIN']) or (current_user.id == event.technician_id) %}
+                {% set user_role_val = (current_user.role.value if hasattr(current_user.role, 'value') else current_user.role)|lower %}
+                {% set event_status_val = (event.status.value if hasattr(event.status, 'value') else event.status)|lower %}
+                {% set can_edit = (user_role_val == 'admin') or (event.technician_id and current_user.id == event.technician_id) %}
 
-                {% if event.status.value == 'planned' %}
+                {% if event_status_val == 'planned' %}
                 <form method="POST" action="/technician/events/{{ event.id }}/start">
                     <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors">
                         {{ t('tech_start') }}
@@ -96,7 +98,7 @@
                 </form>
                 {% endif %}
 
-                {% if event.status.value in ['planned', 'in_progress'] %}
+                {% if event_status_val in ['planned', 'in_progress'] %}
                 <button type="button" onclick="document.getElementById('missedModal').classList.remove('hidden')" class="px-4 py-2 text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-lg transition-colors">
                     {{ t('tech_mark_missed') }}
                 </button>
@@ -112,7 +114,9 @@
         </div>
 
         <!-- Admin Date Edit Form (when in edit mode) -->
-        {% if current_user.role.value in ['admin', 'ADMIN'] %}
+        {% set user_role_val = (current_user.role.value if hasattr(current_user.role, 'value') else current_user.role)|lower %}
+        {% set event_status_val = (event.status.value if hasattr(event.status, 'value') else event.status)|lower %}
+        {% if user_role_val == 'admin' %}
         <div id="adminDateForm" class="hidden mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg">
             <form method="POST" action="/technician/events/{{ event.id }}/edit" class="flex items-center gap-3">
                 <label class="text-xs font-semibold text-amber-900 dark:text-amber-300">Дата проведения (Админ):</label>
@@ -146,7 +150,7 @@
     </div>
 
     <!-- Main Form: Protocol Checklist & Finish / Edit -->
-    <form id="checklistForm" method="POST" action="{% if event.status.value == 'in_progress' %}/technician/events/{{ event.id }}/finish{% else %}/technician/events/{{ event.id }}/edit{% endif %}" enctype="multipart/form-data" class="space-y-6">
+    <form id="checklistForm" method="POST" action="{% if event_status_val == 'in_progress' %}/technician/events/{{ event.id }}/finish{% else %}/technician/events/{{ event.id }}/edit{% endif %}" enctype="multipart/form-data" class="space-y-6">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
             <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center justify-between">
                 <span>{{ t('tech_protocol_checklist') }}</span>
@@ -170,18 +174,19 @@
                         </div>
 
                         <!-- Check controls: Radio buttons for Done / Not Done -->
-                        {% set can_edit = (current_user.role.value in ['admin', 'ADMIN']) or (current_user.id == event.technician_id) %}
-                        {% if event.status.value == 'in_progress' or can_edit %}
+                        {% set can_edit = (user_role_val == 'admin') or (event.technician_id and current_user.id == event.technician_id) %}
+                        {% if event_status_val == 'in_progress' or can_edit %}
                         <div class="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700 self-start sm:self-auto">
                             <label class="inline-flex items-center text-xs font-medium text-green-700 dark:text-green-400 cursor-pointer">
-                                <input type="radio" name="check_{{ item.id }}" value="done" {% if existing_check and existing_check.is_done %}checked{% endif %} {% if event.status.value != 'in_progress' %}disabled{% endif %} class="text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-600">
+                                <input type="radio" name="check_{{ item.id }}" value="done" {% if existing_check and existing_check.is_done %}checked{% endif %} {% if event_status_val != 'in_progress' %}disabled{% endif %} class="text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-600">
                                 <span class="ml-1.5">{{ t('tech_check_done') }}</span>
                             </label>
                             <label class="inline-flex items-center text-xs font-medium text-red-700 dark:text-red-400 cursor-pointer">
-                                <input type="radio" name="check_{{ item.id }}" value="not_done" {% if existing_check and existing_check.is_done == False %}checked{% endif %} {% if event.status.value != 'in_progress' %}disabled{% endif %} class="text-red-600 focus:ring-red-500 border-gray-300 dark:border-gray-600">
+                                <input type="radio" name="check_{{ item.id }}" value="not_done" {% if existing_check and existing_check.is_done == False %}checked{% endif %} {% if event_status_val != 'in_progress' %}disabled{% endif %} class="text-red-600 focus:ring-red-500 border-gray-300 dark:border-gray-600">
                                 <span class="ml-1.5">{{ t('tech_check_not_done') }}</span>
                             </label>
                         </div>
+                        {% endif %}
                         {% else %}
                         <div>
                             {% if existing_check %}
@@ -202,9 +207,9 @@
                     </div>
 
                     <!-- Item comment input or view -->
-                    {% if event.status.value == 'in_progress' or can_edit %}
+                    {% if event_status_val == 'in_progress' or can_edit %}
                     <div>
-                        <input type="text" name="comment_{{ item.id }}" value="{{ existing_check.comment if existing_check and existing_check.comment else '' }}" placeholder="{{ t('tech_add_comment') }}" {% if event.status.value != 'in_progress' %}disabled{% endif %} class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500">
+                        <input type="text" name="comment_{{ item.id }}" value="{{ existing_check.comment if existing_check and existing_check.comment else '' }}" placeholder="{{ t('tech_add_comment') }}" {% if event_status_val != 'in_progress' %}disabled{% endif %} class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
                     {% elif existing_check and existing_check.comment %}
                     <p class="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded">
@@ -222,10 +227,10 @@
         <!-- Event Overall Comment & Action Controls -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
             <h3 class="text-sm font-bold text-gray-900 dark:text-white">{{ t('tech_overall_comment') }}</h3>
-            <textarea id="overallComment" name="comment" rows="2" {% if event.status.value != 'in_progress' %}disabled{% endif %} class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500" placeholder="Общий комментарий к выполненной работе...">{{ event.comment or '' }}</textarea>
+            <textarea id="overallComment" name="comment" rows="2" {% if event_status_val != 'in_progress' %}disabled{% endif %} class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500" placeholder="Общий комментарий к выполненной работе...">{{ event.comment or '' }}</textarea>
 
             <div class="flex justify-end pt-2 gap-2">
-                {% if event.status.value == 'in_progress' %}
+                {% if event_status_val == 'in_progress' %}
                 <button type="submit" class="px-6 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-xs transition-colors flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                     {{ t('tech_finish') }}
@@ -247,7 +252,7 @@
         </h3>
 
         <!-- Upload Form -->
-        {% if event.status.value in ['planned', 'in_progress'] or can_edit %}
+        {% if event_status_val in ['planned', 'in_progress'] or can_edit %}
         <form method="POST" action="/technician/events/{{ event.id }}/attachments" enctype="multipart/form-data" class="flex items-center gap-3 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
             <input type="file" name="file" required class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/30 dark:file:text-indigo-300">
             <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg whitespace-nowrap transition-colors">

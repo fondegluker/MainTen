@@ -53,9 +53,10 @@ UPLOAD_DIR = "/app/uploads/attachments"
 
 def _check_event_access(event: MaintenanceEvent, user: User) -> None:
     """Helper to enforce role access: TECHNICIAN sees only own events, ADMIN sees all, others 403."""
-    if user.role.value in ["admin", "ADMIN"]:
+    role_str = user.role.value.lower() if hasattr(user.role, "value") else str(user.role).lower()
+    if role_str == "admin":
         return
-    if user.role.value in ["technician", "TECHNICIAN"]:
+    if role_str == "technician":
         if event.technician_id != user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return

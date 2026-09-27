@@ -262,3 +262,12 @@ The repository integrates shell scripts for deployment and local testing:
 
 - CI enforces `ruff check .` and `ruff format --check .`.
 - Canonical import order is stdlib → third-party → first-party, with a blank line between groups (enforced by `ruff` rule `I001`).
+
+## Event Detail Page HTTP 500 Hotfix & Attribute Extraction Convention
+
+- **Root Cause of HTTP 500 on `/technician/events/{id}`**:
+  The `_check_event_access` helper function accessed `user.role.value`. While ORM objects usually expose string-backed Enum members with `.value`, depending on ORM session deserialization, raw string assignments, or mock instantiation in tests, `user.role` can be stored directly as a raw string (e.g. `'technician'`), raising `AttributeError: 'str' object has no attribute 'value'` and causing a 500 Internal Server Error on every event detail page request.
+- **Defensive Extraction Convention**:
+  - In Python routes: Extract role/status strings via `val.value.lower() if hasattr(val, "value") else str(val).lower()`.
+  - In Jinja2 templates: Extract role/status strings using template variables `{% set user_role_val = (current_user.role.value if hasattr(current_user.role, 'value') else current_user.role)|lower %}` and `{% set event_status_val = (event.status.value if hasattr(event.status, 'value') else event.status)|lower %}` before performing equality or inclusion checks.
+  - Apply guards for all nullable attributes (`event.technician`, `event.computer.owner_user`, `event.scheduled_date`, `event.started_at`, `event.finished_at`) across event detail templates to prevent `UndefinedError` or `AttributeError`.
