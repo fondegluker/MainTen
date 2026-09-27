@@ -117,6 +117,7 @@ All pull requests and branch merges must pass the following required CI checks i
   - Extended notification service (`generate_technician_daily_digests`) to send daily schedule digest notifications to active technicians with scheduled events on that calendar day.
 - Attachment viewer and technician day route alias added.
 - Month view (with align-to-today toggle) and editing of closed events added.
+- Unified Day/Week/Month switcher and 32-cell weekday-aligned month grid added.
 
 ## Iteration 4 Features & Scope
 

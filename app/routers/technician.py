@@ -121,6 +121,7 @@ def technician_day_schedule(
                 "all_technicians": all_technicians,
                 "message": message,
                 "error": error,
+                "active_view": "day",
             },
         ),
     )
@@ -198,6 +199,7 @@ def technician_week_schedule(
                 "next_week_date": next_week_date,
                 "target_tech": target_tech,
                 "all_technicians": all_technicians,
+                "active_view": "week",
             },
         ),
     )
@@ -266,6 +268,7 @@ def technician_month_schedule(
                 "target_tech": target_tech,
                 "all_technicians": all_technicians,
                 "align_toggle": align_toggle,
+                "active_view": "month",
             },
         ),
     )

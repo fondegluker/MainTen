@@ -1,0 +1,22 @@
+<nav aria-label="Schedule View" class="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-1">
+    <!-- Day View Link -->
+    <a href="/technician/schedule"
+       {% if active_view == 'day' %}aria-current="page" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs"
+       {% else %}class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"{% endif %}>
+        {{ t('tech_day_view') }}
+    </a>
+
+    <!-- Week View Link -->
+    <a href="/technician/week"
+       {% if active_view == 'week' %}aria-current="page" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs"
+       {% else %}class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"{% endif %}>
+        {{ t('tech_week_view') }}
+    </a>
+
+    <!-- Month View Link -->
+    <a href="/technician/month{% if month_grid and month_grid.month_str %}?month={{ month_grid.month_str }}&align={{ 1 if month_grid.align else 0 }}{% endif %}"
+       {% if active_view == 'month' %}aria-current="page" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs"
+       {% else %}class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"{% endif %}>
+        {{ t('tech_month_view') }}
+    </a>
+</nav>

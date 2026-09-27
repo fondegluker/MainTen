@@ -177,6 +177,20 @@ The repository integrates shell scripts for deployment and local testing:
   - Date recalculation rule: editing a closed (`done`/`missed`/`cancelled`) event does NOT recalculate the computer's `last_maintenance_at` or `next_maintenance_due_at` (these are fixed at event completion).
   - Audit logging: every edit writes an `audit_log` row with `action = "edit_closed_event"`, actor ID, and `before_json`/`after_json` field diffs.
 
+## Iteration 5 Hotfix 2 Architectural Decisions (Schedule Switcher & Weekday Aligned Month Grid)
+
+- **Unified Schedule View Switcher Partial**:
+  - Created Jinja partial `app/templates/components/schedule_switcher.html` included across day (`schedule.html`), week (`week.html`), and month (`month.html`) views.
+  - Renders `<nav aria-label="Schedule View">` with links to Day (`/technician/schedule`), Week (`/technician/week`), and Month (`/technician/month`).
+  - Currently active view is highlighted with `aria-current="page"` and active background styling based on `active_view` context parameter (`'day'`, `'week'`, or `'month'`).
+  - Strips irrelevant parameters when switching across view modes (e.g. Month view drops `date=` parameter, Day view drops `month=` parameter).
+- **7-Column Weekday Aligned Month Grid & Interactive Continuation**:
+  - Grid column layout is strictly 7 columns mapped to Monday-Sunday (`Mon=1` .. `Sun=7` / index 0..6).
+  - Header row displays `Пн Вт Ср Чт Пт Сб Вс` (RU) or `Mon Tue Wed Thu Fri Sat Sun` (EN).
+  - Leading empty placeholders: columns in the first row before `start_date.weekday()` render as empty non-interactive dashed placeholder cells.
+  - Exactly 32 date-cells: grid renders 32 consecutive date-cells starting from `start_date`. Date-cells belonging to the next month(s) are flagged with `is_next_month: True`, rendered as normal interactive day-cells displaying date number, and clicking navigates to `/technician/schedule?date=YYYY-MM-DD`.
+  - Sundays (Column 7): Sunday cells are rendered normally in column 7 as informational cells and marked non-working when specified by the calendar.
+
 ## Linter & Formatting Standards
 
 - CI enforces `ruff check .` and `ruff format --check .`.

@@ -22,17 +22,7 @@
 
         <div class="flex flex-wrap items-center gap-3">
             <!-- View toggles (Day / Week / Month) -->
-            <div class="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-1">
-                <a href="/technician/schedule" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-                    {{ t('tech_day_view') }}
-                </a>
-                <a href="/technician/week" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-                    {{ t('tech_week_view') }}
-                </a>
-                <a href="/technician/month?month={{ month_grid.month_str }}&align={{ 1 if align_toggle else 0 }}" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs">
-                    {{ t('tech_month_view') }}
-                </a>
-            </div>
+            {% include "components/schedule_switcher.html" %}
 
             <!-- Month switcher -->
             <div class="flex items-center gap-1 bg-gray-50 dark:bg-gray-900 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -82,27 +72,45 @@
     </div>
     {% endif %}
 
-    <!-- 32-Cell Grid -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
-        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
-            {% for cell in month_grid.cells %}
+    <!-- 7-Column Weekday Aligned 32-Cell Grid -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
+        <!-- Weekday Headers Row (Mon Tue Wed Thu Fri Sat Sun) -->
+        <div class="grid grid-cols-7 gap-2 text-center border-b border-gray-100 dark:border-gray-700 pb-2">
+            {% if locale == 'en' %}
+                {% set headers = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+            {% else %}
+                {% set headers = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] %}
+            {% endif %}
+            {% for h in headers %}
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                {{ h }}
+            </span>
+            {% endfor %}
+        </div>
+
+        <!-- Grid Body -->
+        <div class="grid grid-cols-7 gap-2">
+            <!-- Leading Empty Placeholders for Weekday Alignment -->
+            {% for _ in range(month_grid.leading_placeholders_count) %}
+            <div class="min-h-[110px] p-2.5 rounded-xl border border-dashed border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/20 select-none"></div>
+            {% endfor %}
+
+            <!-- Interactive 32 Date Cells -->
+            {% for cell in month_grid.date_cells %}
             <div class="min-h-[110px] p-2.5 rounded-xl border flex flex-col justify-between transition-colors
-                {% if cell.is_disabled %}bg-gray-50 dark:bg-gray-900/40 border-gray-100 dark:border-gray-800 opacity-40 select-none
+                {% if cell.is_next_month %}bg-slate-50/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800
                 {% elif cell.is_today %}bg-indigo-50/50 dark:bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-900
                 {% elif cell.is_holiday %}bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900/40
                 {% elif cell.is_short_day %}bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40
+                {% elif cell.is_weekend %}bg-gray-50/60 dark:bg-gray-900/30 border-gray-200 dark:border-gray-700/60
                 {% else %}bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-indigo-400{% endif %}">
 
                 <!-- Cell Header -->
                 <div class="flex items-center justify-between gap-1">
-                    {% if not cell.is_disabled %}
-                    <a href="/technician/schedule?date={{ cell.date_str }}" class="font-bold text-sm text-gray-900 dark:text-white hover:underline">
+                    <a href="/technician/schedule?date={{ cell.date_str }}" class="font-bold text-sm {% if cell.is_next_month %}text-gray-500 dark:text-gray-400{% else %}text-gray-900 dark:text-white{% endif %} hover:underline">
                         {{ cell.day_number }}
-                        <span class="text-3xs text-gray-400 font-normal">({{ cell.date.strftime('%b') }})</span>
+                        <span class="text-3xs font-normal text-gray-400">({{ cell.date.strftime('%b') }})</span>
                     </a>
-                    {% else %}
-                    <span class="text-sm font-bold text-gray-300 dark:text-gray-600">—</span>
-                    {% endif %}
 
                     <div class="flex items-center gap-1">
                         {% if cell.is_today %}
@@ -124,7 +132,7 @@
                 </div>
 
                 <!-- Cell Content: Events -->
-                {% if not cell.is_disabled and cell.events %}
+                {% if cell.events %}
                 <div class="mt-2 space-y-1">
                     <span class="text-3xs font-semibold text-gray-500 block">
                         ТО: {{ cell.event_count }}

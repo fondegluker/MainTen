@@ -228,22 +228,53 @@ def test_attachment_endpoint_security_and_content_types(
     assert client.get(f"/technician/events/{event2.id}/attachments/{png_att.id}").status_code == 404
 
 
-def test_technician_month_view(client, tech_user, admin_user, regular_user, observer_user, db_session):
-    """Verify month view grid generation, toggle behavior, 32-cell grid length, and role access."""
+def test_schedule_switcher_component(client, tech_user):
+    """Verify schedule switcher partial presence and aria-current="page" on day, week, and month pages."""
     from app.auth.tokens import generate_session_cookie
 
-    # TECHNICIAN -> 200
     client.cookies.set("session", generate_session_cookie(tech_user.id))
+
+    # 1. Day View -> active_view = 'day'
+    resp_day = client.get("/technician/schedule")
+    assert resp_day.status_code == 200
+    assert 'aria-label="Schedule View"' in resp_day.text
+    assert 'aria-current="page"' in resp_day.text
+
+    # 2. Week View -> active_view = 'week'
+    resp_week = client.get("/technician/week")
+    assert resp_week.status_code == 200
+    assert 'aria-label="Schedule View"' in resp_week.text
+    assert 'aria-current="page"' in resp_week.text
+
+    # 3. Month View -> active_view = 'month'
     resp_month = client.get("/technician/month")
     assert resp_month.status_code == 200
+    assert 'aria-label="Schedule View"' in resp_month.text
+    assert 'aria-current="page"' in resp_month.text
 
-    # Align=0 -> starts on 1st of month
-    resp_align0 = client.get("/technician/month?align=0")
-    assert resp_align0.status_code == 200
 
-    # February 2027 with align=1
-    resp_feb = client.get("/technician/month?month=2027-02&align=1")
-    assert resp_feb.status_code == 200
+def test_technician_month_view_grid_alignment(client, tech_user, admin_user, regular_user, observer_user, db_session):
+    """Verify 7-column weekday alignment, leading placeholders count, 32 interactive cells, next month days, and role access."""
+    from app.auth.tokens import generate_session_cookie
+    from app.services.scheduling_service import get_technician_month_grid
+
+    # Check grid structure for October 2026 with align=0 (October 1, 2026 is a Thursday = weekday 3)
+    today = date(2026, 10, 15)
+    grid_align0 = get_technician_month_grid(2026, 10, align=False, today=today, technician_id=tech_user.id, db=db_session)
+    assert grid_align0["leading_placeholders_count"] == 3  # Thu = 3 (Mon=0, Tue=1, Wed=2)
+    assert len(grid_align0["date_cells"]) == 32
+
+    # Check date cells span into next month (October has 31 days, cell 32 is Nov 1, 2026)
+    last_cell = grid_align0["date_cells"][-1]
+    assert last_cell["is_next_month"] is True
+    assert last_cell["date"] == date(2026, 11, 1)
+
+    # TECHNICIAN endpoint -> 200
+    client.cookies.set("session", generate_session_cookie(tech_user.id))
+    resp_month = client.get("/technician/month?month=2026-10&align=0")
+    assert resp_month.status_code == 200
+    assert "Пн" in resp_month.text or "Mon" in resp_month.text
+    assert "Вс" in resp_month.text or "Sun" in resp_month.text
 
     # USER & OBSERVER -> 403
     client.cookies.set("session", generate_session_cookie(regular_user.id))
