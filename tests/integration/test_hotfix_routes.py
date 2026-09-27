@@ -372,3 +372,47 @@ def test_edit_closed_event(
         data={"status": "in_progress"},
     )
     assert resp_status.status_code == 422
+
+
+def test_attachment_persistence_and_missing_file_handling(client, db_session, sample_event, tech_user):
+    """Verify attachment volume file existence, missing file localized 404 handling, and DB row retention."""
+    import os
+    from app.auth.tokens import generate_session_cookie
+
+    client.cookies.set("session", generate_session_cookie(tech_user.id))
+
+    # 1. Upload attachment
+    file_bytes = b"Sample test file content for persistence check"
+    res_upload = client.post(
+        f"/technician/events/{sample_event.id}/attachments",
+        files={"file": ("test_persist.txt", io.BytesIO(file_bytes), "text/plain")},
+        follow_redirects=True,
+    )
+    assert res_upload.status_code == 200
+
+    # 2. Verify file exists on disk
+    attachment = (
+        db_session.query(MaintenanceEventAttachment)
+        .filter(MaintenanceEventAttachment.event_id == sample_event.id, MaintenanceEventAttachment.filename == "test_persist.txt")
+        .first()
+    )
+    assert attachment is not None
+    assert os.path.exists(attachment.blob_path)
+
+    # GET endpoint -> 200
+    res_get = client.get(f"/technician/events/{sample_event.id}/attachments/{attachment.id}")
+    assert res_get.status_code == 200
+
+    # 3. Simulate missing file by removing it from disk
+    os.remove(attachment.blob_path)
+    assert not os.path.exists(attachment.blob_path)
+
+    # GET endpoint -> 404 with localized error message
+    res_missing = client.get(f"/technician/events/{sample_event.id}/attachments/{attachment.id}")
+    assert res_missing.status_code == 404
+    assert "не найден на сервере" in res_missing.text or "not found on the server" in res_missing.text
+
+    # 4. Verify database row still exists (no auto-deletion)
+    db_session.refresh(attachment)
+    row_check = db_session.query(MaintenanceEventAttachment).filter(MaintenanceEventAttachment.id == attachment.id).first()
+    assert row_check is not None

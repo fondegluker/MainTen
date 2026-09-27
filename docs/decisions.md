@@ -177,6 +177,18 @@ The repository integrates shell scripts for deployment and local testing:
   - Date recalculation rule: editing a closed (`done`/`missed`/`cancelled`) event does NOT recalculate the computer's `last_maintenance_at` or `next_maintenance_due_at` (these are fixed at event completion).
   - Audit logging: every edit writes an `audit_log` row with `action = "edit_closed_event"`, actor ID, and `before_json`/`after_json` field diffs.
 
+## Attachment Persistence via Named Volume & Missing File Handling
+
+- **Docker Named Volume (`mainten_uploads`)**:
+  - Uploaded maintenance event attachments are written under `/app/uploads/attachments` inside the application container.
+  - Configured `mainten_uploads:/app/uploads` as a Docker named volume in `docker-compose.yml` instead of host bind mounts or database `BYTEA` storage.
+  - Rationale: clean separation from application source code, avoids host filesystem permission mismatches, prevents database bloat from binary blobs, and fits project scale target (~300 devices).
+  - Lifecycle: named volume data persists across `docker-compose down`, `docker-compose up --build`, and container recreations. `docker-compose down -v` intentionally wipes both PostgreSQL database data and attachment upload volumes together.
+- **Graceful Server-Side 404 & Database Row Retention**:
+  - When an attachment file is missing on disk, `serve_event_attachment` in `app/routers/technician.py` logs a warning (`logger.warning("Attachment file missing on disk: att_id=%s, path=%s", ...)`), and returns HTTP 404 with a localized message: `"Файл вложения не найден на сервере. Обратитесь к администратору."` (RU) / `"Attachment file not found on the server. Contact the administrator."` (EN).
+  - The database row in `maintenance_event_attachments` is NOT auto-deleted, allowing administrators to inspect or re-upload missing files.
+  - On the UI event detail page (`event_detail.html`), missing or broken image files trigger an `onerror` fallback rendering a disabled placeholder card with the filename and localized missing file note instead of a broken image link.
+
 ## Iteration 5 Hotfix 2 Architectural Decisions (Schedule Switcher & Weekday Aligned Month Grid)
 
 - **Unified Schedule View Switcher Partial**:

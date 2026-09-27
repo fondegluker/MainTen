@@ -1,9 +1,12 @@
 """Technician routes for CFMS (Iteration 5)."""
 
+import logging
 import os
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -45,7 +48,7 @@ ALLOWED_MIME_TYPES = {
 }
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 
-UPLOAD_DIR = "app/static/uploads/attachments"
+UPLOAD_DIR = "/app/uploads/attachments"
 
 
 def _check_event_access(event: MaintenanceEvent, user: User) -> None:
@@ -870,7 +873,12 @@ def serve_event_attachment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
 
     if not os.path.exists(attachment.blob_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File missing on disk")
+        logger.warning("Attachment file missing on disk: att_id=%s, path=%s", att_id, attachment.blob_path)
+        active_locale = get_locale(request, current_user.locale)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=translate("file_missing_on_server", active_locale),
+        )
 
     file_ext = os.path.splitext(attachment.filename)[1].lower()
     mime = attachment.mime.lower() if attachment.mime else ""

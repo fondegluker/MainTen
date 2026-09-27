@@ -28,9 +28,12 @@ services:
       SECRET_KEY: cfms-production-secret-key-change-in-production-998877
     ports:
       - "8000:8000"
+    volumes:
+      - mainten_uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   postgres_data:
+  mainten_uploads:

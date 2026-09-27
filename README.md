@@ -43,6 +43,20 @@ The project includes shell scripts for Docker setup and environment management:
 
 ---
 
+## Attachment Storage
+
+- Maintenance event attachments are stored in the Docker named volume `mainten_uploads` mapped to `/app/uploads` in the application container.
+- The volume survives `docker-compose down`, `docker-compose up --build`, and container recreations.
+- Running `docker-compose down -v` removes the `mainten_uploads` volume along with the database volume (`postgres_data`).
+- To back up attachment files without modifying the database:
+  ```bash
+  docker run --rm -v mainten_uploads:/data -v $(pwd):/backup alpine tar czf /backup/uploads-backup.tgz -C /data .
+  ```
+- To restore attachment files:
+  ```bash
+  docker run --rm -v mainten_uploads:/data -v $(pwd):/backup alpine tar xzf /backup/uploads-backup.tgz -C /data
+  ```
+
 ## Fleet & Calendar Import
 
 CFMS supports importing computer inventory from Excel (`.xlsx`) spreadsheets and calendar schedules via CSV/JSON:
