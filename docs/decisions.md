@@ -143,6 +143,26 @@ The repository integrates shell scripts for deployment and local testing:
 - **Runtime Dependency:** Added `psycopg[binary]>=3.1.18` to base `requirements.txt` as a core runtime requirement for PostgreSQL database connectivity.
 - **CI Resiliency:** The `import-smoke` CI job installs `requirements.txt` and executes without requiring a live PostgreSQL database connection.
 
+## Iteration 5 Hotfix Architectural Decisions
+
+- **Technician Day Route Alias (`/technician/day`)**:
+  - Registered `/technician/day` as an alias decorator on `technician_day_schedule` in `app/routers/technician.py`, delegating to `/technician/schedule` canonical route without code duplication.
+  - Both `/technician/schedule` and `/technician/day` render the day view for the given date (defaulting to today).
+- **Reports Placeholder Page (`/reports`)**:
+  - Served via `app/routers/web.py` with HTTP 200 for `ADMIN`, `TECHNICIAN`, and `OBSERVER` roles.
+  - Returns HTTP 403 Forbidden for `USER` role.
+  - Displays localized placeholder string: `"Отчёты и графики появятся в следующей итерации."` (RU) / `"Reports and charts will arrive in a later iteration."` (EN) and a link back to dashboard.
+- **Vanilla-JS Image Lightbox & Attachment Viewer**:
+  - Implemented a lightweight (< 100 lines) vanilla-JS lightbox modal in `app/templates/technician/event_detail.html` with full-screen image display, prev/next image navigation, caption bar, click outside to close, ESC key listener, and left/right arrow key navigation.
+  - Implemented Modal for Text Files (`.txt`, `.log`, `.md`, `.csv`): fetches content via `fetch()`, escapes HTML to prevent XSS, truncates display at 200 KB with notice banner if content exceeds limit.
+  - Implemented Modal for PDF Documents (`.pdf`): renders native `<iframe>` / `<embed>` preview with a download button.
+  - Show download links for other non-viewable file types.
+- **Attachment Endpoint Security (`GET /technician/events/{event_id}/attachments/{att_id}`)**:
+  - Validates attachment row belongs to specified `event_id` (`MaintenanceEventAttachment.event_id == event_id`). Returns 404 if mismatch or non-existent to avoid leaking file existence.
+  - Restricts file access strictly to assigned `TECHNICIAN` and `ADMIN` users. Other technicians, end `USER`s, and `OBSERVER`s receive HTTP 403.
+  - Sets `Content-Disposition: inline` for images, text, and PDFs; `attachment` for other file types.
+  - Sets `X-Content-Type-Options: nosniff` and `text/plain; charset=utf-8` media-type for text files.
+
 ## Linter & Formatting Standards
 
 - CI enforces `ruff check .` and `ruff format --check .`.

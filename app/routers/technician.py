@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -55,6 +55,7 @@ def _check_event_access(event: MaintenanceEvent, user: User) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 
+@router.get("/day", response_class=HTMLResponse)
 @router.get("/schedule", response_class=HTMLResponse)
 def technician_day_schedule(
     request: Request,
@@ -610,3 +611,74 @@ async def upload_event_attachment(
         url=f"/technician/events/{event.id}?message=Файл+успешно+загружен",
         status_code=status.HTTP_302_FOUND,
     )
+
+
+@router.get("/events/{event_id}/attachments/{att_id}")
+def serve_event_attachment(
+    event_id: int,
+    att_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Serve attachment file with appropriate Content-Type and Content-Disposition.
+    Restricted to assigned technician and ADMIN.
+    """
+    role_val = current_user.role.value.lower() if hasattr(current_user.role, "value") else str(current_user.role).lower()
+    if role_val not in ("admin", "technician"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    event = db.query(MaintenanceEvent).filter(MaintenanceEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    if role_val == "technician" and event.technician_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    attachment = (
+        db.query(MaintenanceEventAttachment)
+        .filter(
+            MaintenanceEventAttachment.id == att_id,
+            MaintenanceEventAttachment.event_id == event_id,
+        )
+        .first()
+    )
+    if not attachment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    if not os.path.exists(attachment.blob_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File missing on disk")
+
+    file_ext = os.path.splitext(attachment.filename)[1].lower()
+    mime = attachment.mime.lower() if attachment.mime else ""
+
+    inline_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".pdf", ".txt", ".log", ".md", ".csv"}
+    is_inline = (
+        file_ext in inline_exts
+        or mime.startswith("image/")
+        or mime in ("application/pdf", "text/plain", "text/markdown", "text/csv")
+    )
+
+    disposition_type = "inline" if is_inline else "attachment"
+
+    headers = {
+        "Content-Disposition": f'{disposition_type}; filename="{attachment.filename}"',
+    }
+
+    if file_ext in (".txt", ".log") or mime == "text/plain":
+        media_type = "text/plain; charset=utf-8"
+        headers["X-Content-Type-Options"] = "nosniff"
+    elif file_ext == ".md" or mime == "text/markdown":
+        media_type = "text/markdown; charset=utf-8"
+        headers["X-Content-Type-Options"] = "nosniff"
+    elif file_ext == ".csv" or mime == "text/csv":
+        media_type = "text/csv; charset=utf-8"
+        headers["X-Content-Type-Options"] = "nosniff"
+    elif mime:
+        media_type = mime
+    else:
+        media_type = "application/octet-stream"
+
+    response = FileResponse(path=attachment.blob_path, media_type=media_type)
+    for k, v in headers.items():
+        response.headers[k] = v
+    return response

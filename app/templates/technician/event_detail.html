@@ -190,7 +190,7 @@
     </form>
 
     <!-- Attachments Section -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-6">
         <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center justify-between">
             <span>{{ t('tech_attachments') }}</span>
             <span class="text-xs text-gray-400">({{ event.attachments|length }})</span>
@@ -206,20 +206,97 @@
         </form>
         {% endif %}
 
-        <!-- List of attachments -->
+        <!-- Categorized List of Attachments -->
         {% if event.attachments %}
-        <ul class="divide-y divide-gray-100 dark:divide-gray-700">
+            {% set images = [] %}
+            {% set text_files = [] %}
+            {% set pdf_files = [] %}
+            {% set other_files = [] %}
+
             {% for att in event.attachments %}
-            <li class="py-2.5 flex items-center justify-between text-xs">
-                <div class="flex items-center space-x-2 truncate">
-                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-                    <span class="font-medium text-gray-800 dark:text-gray-200 truncate">{{ att.filename }}</span>
-                    <span class="text-gray-400">({{ att.mime }})</span>
-                </div>
-                <span class="text-gray-400 text-2xs">{{ att.uploaded_at.strftime('%d.%m.%Y %H:%M') }}</span>
-            </li>
+                {% set ext = att.filename.split('.')[-1].lower() if '.' in att.filename else '' %}
+                {% set mime = att.mime.lower() if att.mime else '' %}
+
+                {% if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'] or mime.startswith('image/') %}
+                    {% set _ = images.append(att) %}
+                {% elif ext in ['txt', 'log', 'md', 'csv'] or mime in ['text/plain', 'text/markdown', 'text/csv'] %}
+                    {% set _ = text_files.append(att) %}
+                {% elif ext == 'pdf' or mime == 'application/pdf' %}
+                    {% set _ = pdf_files.append(att) %}
+                {% else %}
+                    {% set _ = other_files.append(att) %}
+                {% endif %}
             {% endfor %}
-        </ul>
+
+            <!-- 1. Image Thumbnail Grid & Lightbox -->
+            {% if images %}
+            <div class="space-y-2">
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Изображения ({{ images|length }})</h4>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {% for img in images %}
+                    <div onclick="openLightbox({{ loop.index0 }})" class="group cursor-pointer rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-gray-50 dark:bg-gray-900 relative aspect-square max-w-[200px]">
+                        <img src="/technician/events/{{ event.id }}/attachments/{{ img.id }}" alt="{{ img.filename }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
+                        <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                            <span class="text-3xs text-white truncate font-medium">{{ img.filename }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 2. Text Files List -->
+            {% if text_files %}
+            <div class="space-y-2">
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Текстовые файлы ({{ text_files|length }})</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {% for txt in text_files %}
+                    <button type="button" onclick="openTextModal('{{ txt.filename }}', '/technician/events/{{ event.id }}/attachments/{{ txt.id }}')" class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 hover:border-indigo-500 dark:hover:border-indigo-400 text-left transition-colors">
+                        <div class="flex items-center space-x-2 truncate">
+                            <svg class="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <span class="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{{ txt.filename }}</span>
+                        </div>
+                        <span class="text-3xs text-indigo-600 dark:text-indigo-400 font-semibold ml-2">Просмотр &rarr;</span>
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 3. PDF Files List -->
+            {% if pdf_files %}
+            <div class="space-y-2">
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">PDF Документы ({{ pdf_files|length }})</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {% for pdf in pdf_files %}
+                    <button type="button" onclick="openPdfModal('{{ pdf.filename }}', '/technician/events/{{ event.id }}/attachments/{{ pdf.id }}')" class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 hover:border-indigo-500 dark:hover:border-indigo-400 text-left transition-colors">
+                        <div class="flex items-center space-x-2 truncate">
+                            <svg class="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2h-5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <span class="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{{ pdf.filename }}</span>
+                        </div>
+                        <span class="text-3xs text-indigo-600 dark:text-indigo-400 font-semibold ml-2">Открыть PDF &rarr;</span>
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 4. Other Files List -->
+            {% if other_files %}
+            <div class="space-y-2">
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Другие файлы ({{ other_files|length }})</h4>
+                <ul class="divide-y divide-gray-100 dark:divide-gray-700">
+                    {% for file in other_files %}
+                    <li class="py-2 flex items-center justify-between text-xs">
+                        <span class="font-medium text-gray-800 dark:text-gray-200 truncate">{{ file.filename }}</span>
+                        <a href="/technician/events/{{ event.id }}/attachments/{{ file.id }}" download class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold ml-2">
+                            {{ t('att_download') }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
         {% else %}
         <p class="text-xs text-gray-400 italic">Прикрепеления отсутствуют.</p>
         {% endif %}
@@ -247,4 +324,162 @@
         </form>
     </div>
 </div>
+
+<!-- Vanilla JS Image Lightbox -->
+<div id="lightboxOverlay" class="hidden fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-between p-4" onclick="closeLightboxOnOverlay(event)">
+    <div class="w-full flex justify-between items-center text-white px-4 pt-2">
+        <span id="lightboxCaption" class="text-sm font-semibold truncate max-w-xl"></span>
+        <button type="button" onclick="closeLightbox()" class="p-2 text-gray-400 hover:text-white text-2xl font-bold">&times;</button>
+    </div>
+
+    <div class="relative flex-1 flex items-center justify-center w-full my-2">
+        <button type="button" onclick="prevLightboxImage(event)" class="absolute left-2 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white p-3 rounded-full text-xl transition-colors select-none">&larr;</button>
+        <img id="lightboxImg" src="" alt="" class="max-h-[80vh] max-w-[90vw] object-contain rounded shadow-2xl select-none">
+        <button type="button" onclick="nextLightboxImage(event)" class="absolute right-2 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white p-3 rounded-full text-xl transition-colors select-none">&rarr;</button>
+    </div>
+
+    <div class="text-xs text-gray-400 pb-2">
+        <span id="lightboxIndex"></span> | {{ t('att_close') }} (Esc)
+    </div>
+</div>
+
+<!-- Modal for Text File Preview -->
+<div id="textModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+        <div class="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
+            <h3 id="textModalTitle" class="text-sm font-bold text-gray-900 dark:text-white truncate"></h3>
+            <div class="flex items-center gap-2">
+                <a id="textModalDownload" href="" download class="px-3 py-1 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-md">
+                    {{ t('att_download') }}
+                </a>
+                <button type="button" onclick="closeTextModal()" class="text-gray-400 hover:text-gray-600 text-lg font-bold px-2">&times;</button>
+            </div>
+        </div>
+        <div id="textTruncatedNotice" class="hidden bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs px-4 py-2 border-b border-amber-200">
+            {{ t('att_truncated_notice') }}
+        </div>
+        <div class="p-4 overflow-auto flex-1 bg-gray-900 text-green-400 font-mono text-xs leading-relaxed">
+            <pre id="textModalContent" class="whitespace-pre-wrap break-words"></pre>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for PDF Preview -->
+<div id="pdfModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full h-[85vh] flex flex-col overflow-hidden">
+        <div class="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
+            <h3 id="pdfModalTitle" class="text-sm font-bold text-gray-900 dark:text-white truncate"></h3>
+            <div class="flex items-center gap-2">
+                <a id="pdfModalDownload" href="" download class="px-3 py-1 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-md">
+                    {{ t('att_download') }}
+                </a>
+                <button type="button" onclick="closePdfModal()" class="text-gray-400 hover:text-gray-600 text-lg font-bold px-2">&times;</button>
+            </div>
+        </div>
+        <div class="flex-1 bg-gray-100 dark:bg-gray-900">
+            <iframe id="pdfModalFrame" src="" class="w-full h-full border-0"></iframe>
+        </div>
+    </div>
+</div>
+
+<script>
+// Image Lightbox Logic (< 100 lines)
+const imageList = [
+    {% if images %}
+    {% for img in images %}
+    { url: "/technician/events/{{ event.id }}/attachments/{{ img.id }}", filename: "{{ img.filename }}" },
+    {% endfor %}
+    {% endif %}
+];
+let currentImgIndex = 0;
+
+function openLightbox(index) {
+    if (!imageList.length) return;
+    currentImgIndex = index;
+    updateLightbox();
+    document.getElementById('lightboxOverlay').classList.remove('hidden');
+    document.addEventListener('keydown', handleLightboxKeys);
+}
+
+function closeLightbox() {
+    document.getElementById('lightboxOverlay').classList.add('hidden');
+    document.removeEventListener('keydown', handleLightboxKeys);
+}
+
+function closeLightboxOnOverlay(e) {
+    if (e.target.id === 'lightboxOverlay') closeLightbox();
+}
+
+function updateLightbox() {
+    const item = imageList[currentImgIndex];
+    document.getElementById('lightboxImg').src = item.url;
+    document.getElementById('lightboxCaption').textContent = item.filename;
+    document.getElementById('lightboxIndex').textContent = (currentImgIndex + 1) + " / " + imageList.length;
+}
+
+function prevLightboxImage(e) {
+    if (e) e.stopPropagation();
+    currentImgIndex = (currentImgIndex - 1 + imageList.length) % imageList.length;
+    updateLightbox();
+}
+
+function nextLightboxImage(e) {
+    if (e) e.stopPropagation();
+    currentImgIndex = (currentImgIndex + 1) % imageList.length;
+    updateLightbox();
+}
+
+function handleLightboxKeys(e) {
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft') prevLightboxImage();
+    else if (e.key === 'ArrowRight') nextLightboxImage();
+}
+
+// Text Modal Logic
+function openTextModal(filename, url) {
+    document.getElementById('textModalTitle').textContent = filename;
+    document.getElementById('textModalDownload').href = url;
+    document.getElementById('textModalContent').textContent = "Загрузка...";
+    document.getElementById('textTruncatedNotice').classList.add('hidden');
+    document.getElementById('textModal').classList.remove('hidden');
+
+    fetch(url)
+        .then(res => res.arrayBuffer())
+        .then(buffer => {
+            const MAX_BYTES = 200 * 1024;
+            let truncated = false;
+            let sliceBuffer = buffer;
+            if (buffer.byteLength > MAX_BYTES) {
+                sliceBuffer = buffer.slice(0, MAX_BYTES);
+                truncated = true;
+            }
+            const decoder = new TextDecoder('utf-8');
+            const textContent = decoder.decode(sliceBuffer);
+            document.getElementById('textModalContent').textContent = textContent;
+            if (truncated) {
+                document.getElementById('textTruncatedNotice').classList.remove('hidden');
+            }
+        })
+        .catch(err => {
+            document.getElementById('textModalContent').textContent = "Ошибка при загрузке файла.";
+        });
+}
+
+function closeTextModal() {
+    document.getElementById('textModal').classList.add('hidden');
+}
+
+// PDF Modal Logic
+function openPdfModal(filename, url) {
+    document.getElementById('pdfModalTitle').textContent = filename;
+    document.getElementById('pdfModalDownload').href = url;
+    document.getElementById('pdfModalFrame').src = url;
+    document.getElementById('pdfModal').classList.remove('hidden');
+}
+
+function closePdfModal() {
+    document.getElementById('pdfModalFrame').src = "";
+    document.getElementById('pdfModal').classList.add('hidden');
+}
+</script>
 {% endblock %}

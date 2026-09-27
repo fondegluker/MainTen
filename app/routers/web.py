@@ -132,22 +132,13 @@ def logout():
     return resp
 
 
-@router.get("/technician/schedule", response_class=HTMLResponse)
-def technician_schedule_page(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-):
-    if current_user.role not in (UserRole.ADMIN, UserRole.TECHNICIAN):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    return templates.TemplateResponse("technician_schedule.html", context_with_defaults(request, current_user))
-
-
 @router.get("/reports", response_class=HTMLResponse)
 def reports_page(
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role not in (UserRole.ADMIN, UserRole.TECHNICIAN, UserRole.OBSERVER):
+    role_val = current_user.role.value.lower() if hasattr(current_user.role, "value") else str(current_user.role).lower()
+    if role_val not in ("admin", "technician", "observer"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return templates.TemplateResponse("reports.html", context_with_defaults(request, current_user))
 

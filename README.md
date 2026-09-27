@@ -115,6 +115,7 @@ All pull requests and branch merges must pass the following required CI checks i
   - Technicians can manually create out-of-schedule maintenance events for any active computer with custom date, time slot, and reasoning. Added `is_unplanned` flag in database schema.
 - **Technician Daily Digest Notifications**:
   - Extended notification service (`generate_technician_daily_digests`) to send daily schedule digest notifications to active technicians with scheduled events on that calendar day.
+- Attachment viewer and technician day route alias added.
 
 ## Iteration 4 Features & Scope
 
