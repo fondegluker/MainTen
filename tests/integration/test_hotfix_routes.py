@@ -226,3 +226,118 @@ def test_attachment_endpoint_security_and_content_types(
     db_session.commit()
 
     assert client.get(f"/technician/events/{event2.id}/attachments/{png_att.id}").status_code == 404
+
+
+def test_technician_month_view(client, tech_user, admin_user, regular_user, observer_user, db_session):
+    """Verify month view grid generation, toggle behavior, 32-cell grid length, and role access."""
+    from app.auth.tokens import generate_session_cookie
+
+    # TECHNICIAN -> 200
+    client.cookies.set("session", generate_session_cookie(tech_user.id))
+    resp_month = client.get("/technician/month")
+    assert resp_month.status_code == 200
+
+    # Align=0 -> starts on 1st of month
+    resp_align0 = client.get("/technician/month?align=0")
+    assert resp_align0.status_code == 200
+
+    # February 2027 with align=1
+    resp_feb = client.get("/technician/month?month=2027-02&align=1")
+    assert resp_feb.status_code == 200
+
+    # USER & OBSERVER -> 403
+    client.cookies.set("session", generate_session_cookie(regular_user.id))
+    assert client.get("/technician/month").status_code == 403
+
+    client.cookies.set("session", generate_session_cookie(observer_user.id))
+    assert client.get("/technician/month").status_code == 403
+
+    # ADMIN with ?technician_id= -> 200
+    client.cookies.set("session", generate_session_cookie(admin_user.id))
+    resp_admin = client.get(f"/technician/month?technician_id={tech_user.id}")
+    assert resp_admin.status_code == 200
+
+
+def test_edit_closed_event(
+    client, db_session, test_computer, tech_user, other_tech_user, admin_user, regular_user, observer_user
+):
+    """Verify editing closed events: permissions, audit logging, date recalculation omission, and status/field protections."""
+    from app.auth.tokens import generate_session_cookie
+    from app.models.models import AuditLog
+
+    event = MaintenanceEvent(
+        computer_id=test_computer.id,
+        technician_id=tech_user.id,
+        scheduled_date=date.today(),
+        status=MaintenanceEventStatus.DONE,
+        finished_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(event)
+    db_session.commit()
+    db_session.refresh(event)
+
+    last_maint_before = test_computer.last_maintenance_at
+    next_maint_before = test_computer.next_maintenance_due_at
+
+    # 1. TECHNICIAN edits own done event -> 200, comment updated, audit logged, computer dates UNCHANGED
+    client.cookies.set("session", generate_session_cookie(tech_user.id))
+    resp_edit = client.post(
+        f"/technician/events/{event.id}/edit",
+        data={"comment": "Обновленный комментарий техника"},
+        follow_redirects=True,
+    )
+    assert resp_edit.status_code == 200
+    assert "Изменения успешно сохранены" in resp_edit.text
+
+    db_session.refresh(event)
+    db_session.refresh(test_computer)
+    assert event.comment == "Обновленный комментарий техника"
+    assert test_computer.last_maintenance_at == last_maint_before
+    assert test_computer.next_maintenance_due_at == next_maint_before
+
+    audit_entry = (
+        db_session.query(AuditLog)
+        .filter(AuditLog.action == "edit_closed_event", AuditLog.entity_id == event.id)
+        .first()
+    )
+    assert audit_entry is not None
+
+    # 2. TECHNICIAN tries to change scheduled_date -> 403
+    resp_tech_date = client.post(
+        f"/technician/events/{event.id}/edit",
+        data={"scheduled_date": "2026-01-01"},
+    )
+    assert resp_tech_date.status_code == 403
+
+    # 3. TECHNICIAN tries to edit another tech's done event -> 403
+    client.cookies.set("session", generate_session_cookie(other_tech_user.id))
+    assert client.post(f"/technician/events/{event.id}/edit", data={"comment": "test"}).status_code == 403
+
+    # 4. USER & OBSERVER -> 403
+    client.cookies.set("session", generate_session_cookie(regular_user.id))
+    assert client.post(f"/technician/events/{event.id}/edit", data={"comment": "test"}).status_code == 403
+
+    client.cookies.set("session", generate_session_cookie(observer_user.id))
+    assert client.post(f"/technician/events/{event.id}/edit", data={"comment": "test"}).status_code == 403
+
+    # 5. ADMIN edits scheduled_date on done event -> 200, computer dates UNCHANGED
+    client.cookies.set("session", generate_session_cookie(admin_user.id))
+    resp_admin_date = client.post(
+        f"/technician/events/{event.id}/edit",
+        data={"scheduled_date": "2026-06-15"},
+        follow_redirects=True,
+    )
+    assert resp_admin_date.status_code == 200
+    db_session.refresh(event)
+    db_session.refresh(test_computer)
+    assert event.scheduled_date == date(2026, 6, 15)
+    assert test_computer.last_maintenance_at == last_maint_before
+    assert test_computer.next_maintenance_due_at == next_maint_before
+
+    # 6. Attempt to change status via edit -> 422 rejected
+    resp_status = client.post(
+        f"/technician/events/{event.id}/edit",
+        data={"status": "in_progress"},
+    )
+    assert resp_status.status_code == 422

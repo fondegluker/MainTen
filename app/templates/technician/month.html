@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('tech_month_view') }} — CFMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with month navigation & view toggles -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg class="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                {{ t('tech_month_view') }}: {% if locale == 'en' %}{{ month_grid.month_title_en }}{% else %}{{ month_grid.month_title_ru }}{% endif %}
+            </h1>
+            {% if target_tech %}
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {{ target_tech.username }} ({{ target_tech.email_or_login }})
+            </p>
+            {% endif %}
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- View toggles (Day / Week / Month) -->
+            <div class="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-1">
+                <a href="/technician/schedule" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                    {{ t('tech_day_view') }}
+                </a>
+                <a href="/technician/week" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                    {{ t('tech_week_view') }}
+                </a>
+                <a href="/technician/month?month={{ month_grid.month_str }}&align={{ 1 if align_toggle else 0 }}" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs">
+                    {{ t('tech_month_view') }}
+                </a>
+            </div>
+
+            <!-- Month switcher -->
+            <div class="flex items-center gap-1 bg-gray-50 dark:bg-gray-900 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
+                <a href="/technician/month?month={{ month_grid.prev_month_str }}&align={{ 1 if align_toggle else 0 }}" class="p-1.5 text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400" title="Предыдущий месяц">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </a>
+                <a href="/technician/month?align={{ 1 if align_toggle else 0 }}" class="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
+                    Текущий месяц
+                </a>
+                <a href="/technician/month?month={{ month_grid.next_month_str }}&align={{ 1 if align_toggle else 0 }}" class="p-1.5 text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400" title="Следующий месяц">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </a>
+            </div>
+
+            <!-- Align to today's day-of-month Toggle -->
+            <div class="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                <a href="/technician/month?month={{ month_grid.month_str }}&align={{ 0 if align_toggle else 1 }}" class="flex items-center gap-2 text-xs font-semibold text-indigo-900 dark:text-indigo-300">
+                    <input type="checkbox" {% if align_toggle %}checked{% endif %} class="rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none">
+                    <span>{{ t('tech_align_toggle_label') }}</span>
+                </a>
+            </div>
+
+            <a href="/technician/unplanned" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                {{ t('tech_create_unplanned') }}
+            </a>
+        </div>
+    </div>
+
+    <!-- Admin technician selector -->
+    {% if current_user.role.value in ['admin', 'ADMIN'] and all_technicians %}
+    <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 p-4 rounded-xl flex items-center gap-4">
+        <span class="text-sm font-medium text-indigo-900 dark:text-indigo-300">
+            Просмотр графика другого техника (Админ):
+        </span>
+        <form method="GET" action="/technician/month" class="flex items-center gap-2">
+            <input type="hidden" name="month" value="{{ month_grid.month_str }}">
+            <input type="hidden" name="align" value="{{ 1 if align_toggle else 0 }}">
+            <select name="technician_id" onchange="this.form.submit()" class="text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                {% for tech in all_technicians %}
+                <option value="{{ tech.id }}" {% if target_tech and target_tech.id == tech.id %}selected{% endif %}>
+                    {{ tech.username }} ({{ tech.email_or_login }})
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- 32-Cell Grid -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+            {% for cell in month_grid.cells %}
+            <div class="min-h-[110px] p-2.5 rounded-xl border flex flex-col justify-between transition-colors
+                {% if cell.is_disabled %}bg-gray-50 dark:bg-gray-900/40 border-gray-100 dark:border-gray-800 opacity-40 select-none
+                {% elif cell.is_today %}bg-indigo-50/50 dark:bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-900
+                {% elif cell.is_holiday %}bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900/40
+                {% elif cell.is_short_day %}bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40
+                {% else %}bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-indigo-400{% endif %}">
+
+                <!-- Cell Header -->
+                <div class="flex items-center justify-between gap-1">
+                    {% if not cell.is_disabled %}
+                    <a href="/technician/schedule?date={{ cell.date_str }}" class="font-bold text-sm text-gray-900 dark:text-white hover:underline">
+                        {{ cell.day_number }}
+                        <span class="text-3xs text-gray-400 font-normal">({{ cell.date.strftime('%b') }})</span>
+                    </a>
+                    {% else %}
+                    <span class="text-sm font-bold text-gray-300 dark:text-gray-600">—</span>
+                    {% endif %}
+
+                    <div class="flex items-center gap-1">
+                        {% if cell.is_today %}
+                        <span class="text-3xs font-bold px-1.5 py-0.5 bg-indigo-600 text-white rounded">
+                            {{ t('tech_today') }}
+                        </span>
+                        {% endif %}
+                        {% if cell.is_holiday %}
+                        <span class="text-3xs font-semibold px-1 py-0.5 bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 rounded">
+                            Праздник
+                        </span>
+                        {% endif %}
+                        {% if cell.is_short_day %}
+                        <span class="text-3xs font-semibold px-1 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 rounded">
+                            Сокр.
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Cell Content: Events -->
+                {% if not cell.is_disabled and cell.events %}
+                <div class="mt-2 space-y-1">
+                    <span class="text-3xs font-semibold text-gray-500 block">
+                        ТО: {{ cell.event_count }}
+                    </span>
+                    {% for ev in cell.events[:2] %}
+                    <a href="/technician/events/{{ ev.id }}" class="block p-1 text-3xs rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 truncate hover:text-indigo-600 font-medium">
+                        {{ ev.computer.hostname }}
+                    </a>
+                    {% endfor %}
+                    {% if cell.event_count > 2 %}
+                    <span class="text-3xs text-indigo-600 dark:text-indigo-400 font-semibold block">
+                        + ещё {{ cell.event_count - 2 }}
+                    </span>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="flex-1"></div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

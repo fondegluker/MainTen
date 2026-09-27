@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_technician
+from app.auth.dependencies import get_current_user, require_admin, require_technician
 from app.core.database import get_db
 from app.core.i18n import format_date_localized, get_locale, translate
 from app.models.models import (
@@ -26,7 +26,11 @@ from app.models.models import (
 )
 from app.routers.web import context_with_defaults
 from app.services.audit_service import log_audit
-from app.services.scheduling_service import compute_next_maintenance_due_at
+from app.services.scheduling_service import (
+    compute_next_maintenance_due_at,
+    get_technician_events_in_range,
+    get_technician_month_grid,
+)
 
 router = APIRouter(prefix="/technician", tags=["technician"])
 templates = Jinja2Templates(directory="app/templates")
@@ -153,16 +157,7 @@ def technician_week_schedule(
 
     target_tech = db.query(User).filter(User.id == target_tech_id).first()
 
-    events = (
-        db.query(MaintenanceEvent)
-        .filter(
-            MaintenanceEvent.technician_id == target_tech_id,
-            MaintenanceEvent.scheduled_date >= week_monday,
-            MaintenanceEvent.scheduled_date <= week_sunday,
-        )
-        .order_by(MaintenanceEvent.scheduled_date.asc(), MaintenanceEvent.scheduled_slot.asc().nulls_last())
-        .all()
-    )
+    events = get_technician_events_in_range(db, target_tech_id, week_monday, week_sunday)
 
     # Group events by day
     week_days = []
@@ -206,6 +201,76 @@ def technician_week_schedule(
             },
         ),
     )
+
+
+@router.get("/month", response_class=HTMLResponse)
+def technician_month_schedule(
+    request: Request,
+    month_str: str | None = Query(None, alias="month"),
+    align_param: int | None = Query(None, alias="align"),
+    technician_id: int | None = Query(None),
+    current_user: User = Depends(require_technician),
+    db: Session = Depends(get_db),
+):
+    """Technician month view with 32-cell grid and align-to-today toggle."""
+    today_d = datetime.now(timezone.utc).date()
+
+    # Determine target month (year, month)
+    if month_str and month_str.strip():
+        try:
+            parts = month_str.strip().split("-")
+            target_year = int(parts[0])
+            target_month = int(parts[1])
+        except (ValueError, IndexError):
+            target_year = today_d.year
+            target_month = today_d.month
+    else:
+        target_year = today_d.year
+        target_month = today_d.month
+
+    # Determine align toggle state (default ON = True)
+    if align_param is not None:
+        align_toggle = bool(align_param == 1)
+    else:
+        cookie_val = request.cookies.get("align_toggle")
+        if cookie_val is not None:
+            align_toggle = bool(cookie_val == "1")
+        else:
+            align_toggle = True
+
+    # Determine target technician
+    if current_user.role.value in ["admin", "ADMIN"] and technician_id:
+        target_tech_id = technician_id
+    else:
+        target_tech_id = current_user.id
+
+    target_tech = db.query(User).filter(User.id == target_tech_id).first()
+    all_technicians = db.query(User).filter(User.role == UserRole.TECHNICIAN, User.is_active == True).all()
+
+    month_grid = get_technician_month_grid(
+        year=target_year,
+        month=target_month,
+        align=align_toggle,
+        today=today_d,
+        technician_id=target_tech_id,
+        db=db,
+    )
+
+    resp = templates.TemplateResponse(
+        "technician/month.html",
+        context_with_defaults(
+            request,
+            current_user,
+            {
+                "month_grid": month_grid,
+                "target_tech": target_tech,
+                "all_technicians": all_technicians,
+                "align_toggle": align_toggle,
+            },
+        ),
+    )
+    resp.set_cookie("align_toggle", "1" if align_toggle else "0")
+    return resp
 
 
 @router.get("/unplanned", response_class=HTMLResponse)
@@ -609,6 +674,162 @@ async def upload_event_attachment(
 
     return RedirectResponse(
         url=f"/technician/events/{event.id}?message=Файл+успешно+загружен",
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
+@router.post("/events/{event_id}/edit")
+async def edit_maintenance_event(
+    event_id: int,
+    request: Request,
+    comment: str | None = Form(None),
+    scheduled_date_str: str | None = Form(None, alias="scheduled_date"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Edit maintenance event (checklist, comments, scheduled_date for admin).
+    Allowed for assigned technician or admin. Does NOT recalculate computer due dates.
+    """
+    event = db.query(MaintenanceEvent).filter(MaintenanceEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+    role_val = current_user.role.value.lower() if hasattr(current_user.role, "value") else str(current_user.role).lower()
+
+    if role_val == "technician" and event.technician_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if role_val not in ("admin", "technician"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    form_data = await request.form()
+
+    # Reject status or computer/technician re-assignments
+    if "status" in form_data and str(form_data["status"]).lower() != event.status.value.lower():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Cannot change status via edit")
+    if "computer_id" in form_data and str(form_data["computer_id"]) != str(event.computer_id):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Cannot change computer_id")
+    if "technician_id" in form_data and str(form_data["technician_id"]) != str(event.technician_id):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Cannot change technician_id")
+
+    before_json = {
+        "comment": event.comment,
+        "scheduled_date": event.scheduled_date.isoformat() if event.scheduled_date else None,
+        "checks": {c.protocol_item_id: {"is_done": c.is_done, "comment": c.comment} for c in event.checks},
+    }
+
+    # Scheduled date change (ADMIN only)
+    if scheduled_date_str and scheduled_date_str.strip():
+        try:
+            new_date = date.fromisoformat(scheduled_date_str.strip())
+            if new_date != event.scheduled_date:
+                if role_val != "admin":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Only ADMIN can edit scheduled_date",
+                    )
+                event.scheduled_date = new_date
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid date format")
+
+    if comment is not None:
+        event.comment = comment.strip() if comment.strip() else None
+
+    # Update protocol checks
+    active_items = db.query(MaintenanceProtocolItem).filter(MaintenanceProtocolItem.is_active == True).all()
+    for item in active_items:
+        check_key = f"check_{item.id}"
+        comment_key = f"comment_{item.id}"
+
+        if check_key in form_data:
+            is_done_val = form_data[check_key] == "done"
+            item_comment = str(form_data.get(comment_key, "")).strip() or None
+
+            chk = (
+                db.query(MaintenanceEventCheck)
+                .filter(MaintenanceEventCheck.event_id == event.id, MaintenanceEventCheck.protocol_item_id == item.id)
+                .first()
+            )
+            if chk:
+                chk.is_done = is_done_val
+                chk.comment = item_comment
+                chk.checked_at = datetime.now(timezone.utc)
+            else:
+                chk = MaintenanceEventCheck(
+                    event_id=event.id,
+                    protocol_item_id=item.id,
+                    is_done=is_done_val,
+                    comment=item_comment,
+                    checked_at=datetime.now(timezone.utc),
+                )
+                db.add(chk)
+
+    event.updated_at = datetime.now(timezone.utc)
+
+    after_json = {
+        "comment": event.comment,
+        "scheduled_date": event.scheduled_date.isoformat() if event.scheduled_date else None,
+        "checks": {c.protocol_item_id: {"is_done": c.is_done, "comment": c.comment} for c in event.checks},
+    }
+
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="edit_closed_event",
+        entity="maintenance_events",
+        entity_id=event.id,
+        before=before_json,
+        after=after_json,
+    )
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/technician/events/{event.id}?message=Изменения+успешно+сохранены",
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
+@router.post("/events/{event_id}/attachments/{att_id}/delete")
+def delete_event_attachment(
+    event_id: int,
+    att_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Delete an event attachment (ADMIN only)."""
+    event = db.query(MaintenanceEvent).filter(MaintenanceEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+    attachment = (
+        db.query(MaintenanceEventAttachment)
+        .filter(
+            MaintenanceEventAttachment.id == att_id,
+            MaintenanceEventAttachment.event_id == event_id,
+        )
+        .first()
+    )
+    if not attachment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    if os.path.exists(attachment.blob_path):
+        try:
+            os.remove(attachment.blob_path)
+        except OSError:
+            pass
+
+    db.delete(attachment)
+    log_audit(
+        db=db,
+        actor_user_id=current_user.id,
+        action="delete_event_attachment",
+        entity="maintenance_event_attachments",
+        entity_id=attachment.id,
+        before={"filename": attachment.filename, "event_id": event_id},
+    )
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/technician/events/{event.id}?message=Вложение+удалено",
         status_code=status.HTTP_302_FOUND,
     )
 

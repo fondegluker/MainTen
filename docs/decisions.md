@@ -163,6 +163,20 @@ The repository integrates shell scripts for deployment and local testing:
   - Sets `Content-Disposition: inline` for images, text, and PDFs; `attachment` for other file types.
   - Sets `X-Content-Type-Options: nosniff` and `text/plain; charset=utf-8` media-type for text files.
 
+## Iteration 5 Extension Architectural Decisions (Month View & Closed Event Editing)
+
+- **Technician Month View & Align-to-Today Toggle (`/technician/month`)**:
+  - Query parameter contract: `GET /technician/month?month=YYYY-MM&align=0|1&technician_id=...`. Toggle state defaults to `align=1` (ON) and is preserved per-session in `align_toggle` cookie.
+  - Align rule: when `align=1`, grid start date equals today's system day-of-month if that day exists in the displayed month; if the day does not exist in that month (e.g. 31 in Feb/30-day month), grid falls back to starting on the 1st of the month. When `align=0`, grid starts on the 1st of the month.
+  - Trailing cell convention: grid size is strictly fixed at 32 day-cells for stable layout height. Trailing cells beyond the end of the displayed month are rendered as disabled non-interactive placeholders showing no date number or events.
+- **Closed Maintenance Event Editing (`POST /technician/events/{id}/edit`)**:
+  - Access control: assigned `TECHNICIAN` (own events) and `ADMIN` (any event). Other technicians, end `USER`s, and `OBSERVER`s receive HTTP 403.
+  - Editable fields: protocol checklist items (`is_done` and `comment`), event-level `comment`, and uploading new attachments.
+  - Admin-only editable fields: `scheduled_date` and attachment deletion (`POST /technician/events/{id}/attachments/{att_id}/delete`). Technicians attempting to modify `scheduled_date` or delete attachments receive HTTP 403.
+  - Immutable fields: `status`, `computer_id`, `technician_id`, `is_unplanned` cannot be modified via edit. Status changes remain governed by state transition endpoints.
+  - Date recalculation rule: editing a closed (`done`/`missed`/`cancelled`) event does NOT recalculate the computer's `last_maintenance_at` or `next_maintenance_due_at` (these are fixed at event completion).
+  - Audit logging: every edit writes an `audit_log` row with `action = "edit_closed_event"`, actor ID, and `before_json`/`after_json` field diffs.
+
 ## Linter & Formatting Standards
 
 - CI enforces `ruff check .` and `ruff format --check .`.

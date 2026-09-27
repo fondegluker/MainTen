@@ -307,6 +307,122 @@ def get_window_calendar_days(
     return compute_available_dates(computer_id, db, today=today, locale=locale)
 
 
+def get_technician_events_in_range(
+    db: Session, technician_id: int, start_date: date, end_date: date
+) -> list[MaintenanceEvent]:
+    """Retrieve maintenance events assigned to technician in date range [start_date .. end_date]."""
+    return (
+        db.query(MaintenanceEvent)
+        .filter(
+            MaintenanceEvent.technician_id == technician_id,
+            MaintenanceEvent.scheduled_date >= start_date,
+            MaintenanceEvent.scheduled_date <= end_date,
+        )
+        .order_by(MaintenanceEvent.scheduled_date.asc(), MaintenanceEvent.scheduled_slot.asc().nulls_last())
+        .all()
+    )
+
+
+def get_technician_month_grid(
+    year: int, month: int, align: bool, today: date, technician_id: int, db: Session
+) -> dict[str, Any]:
+    """Generate 32-cell month grid for technician schedule with optional align-to-today start date."""
+    _, num_days = calendar.monthrange(year, month)
+
+    if align:
+        sys_day = today.day
+        start_day = sys_day if sys_day <= num_days else 1
+    else:
+        start_day = 1
+
+    start_date = date(year, month, start_day)
+    end_date = start_date + timedelta(days=31)  # 32 days total [0 .. 31]
+
+    events = get_technician_events_in_range(db, technician_id, start_date, end_date)
+    events_by_date: dict[date, list[MaintenanceEvent]] = {}
+    for ev in events:
+        if ev.scheduled_date:
+            events_by_date.setdefault(ev.scheduled_date, []).append(ev)
+
+    entries = (
+        db.query(WorkingCalendar)
+        .filter(WorkingCalendar.date >= start_date, WorkingCalendar.date <= end_date)
+        .all()
+    )
+    entry_map = {e.date: e for e in entries}
+
+    cells = []
+    for i in range(32):
+        c_date = start_date + timedelta(days=i)
+        is_in_displayed_month = (c_date.month == month and c_date.year == year)
+
+        if is_in_displayed_month:
+            entry = entry_map.get(c_date)
+            kind_val = entry.kind.value if (entry and hasattr(entry.kind, "value")) else (str(entry.kind) if entry else "")
+            is_holiday = bool(kind_val == "holiday" or (c_date.month, c_date.day) in BELARUS_HOLIDAYS)
+            is_short_day = bool(kind_val == "short_day")
+            day_events = events_by_date.get(c_date, [])
+
+            cells.append(
+                {
+                    "date": c_date,
+                    "date_str": c_date.isoformat(),
+                    "day_number": c_date.day,
+                    "is_disabled": False,
+                    "is_today": (c_date == today),
+                    "is_working": entry.is_working if entry else (c_date.weekday() < 5),
+                    "is_holiday": is_holiday,
+                    "is_short_day": is_short_day,
+                    "is_weekend": (c_date.weekday() >= 5),
+                    "events": day_events,
+                    "event_count": len(day_events),
+                }
+            )
+        else:
+            cells.append(
+                {
+                    "date": c_date,
+                    "date_str": c_date.isoformat(),
+                    "day_number": None,
+                    "is_disabled": True,
+                    "is_today": False,
+                    "is_working": False,
+                    "is_holiday": False,
+                    "is_short_day": False,
+                    "is_weekend": False,
+                    "events": [],
+                    "event_count": 0,
+                }
+            )
+
+    # Previous and next month strings YYYY-MM
+    if month == 1:
+        prev_month_str = f"{year - 1:04d}-12"
+    else:
+        prev_month_str = f"{year:04d}-{month - 1:02d}"
+
+    if month == 12:
+        next_month_str = f"{year + 1:04d}-01"
+    else:
+        next_month_str = f"{year:04d}-{month + 1:02d}"
+
+    month_names_ru = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+    month_names_en = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+    return {
+        "year": year,
+        "month": month,
+        "month_str": f"{year:04d}-{month:02d}",
+        "month_title_ru": f"{month_names_ru[month - 1]} {year}",
+        "month_title_en": f"{month_names_en[month - 1]} {year}",
+        "start_date": start_date,
+        "align": align,
+        "cells": cells,
+        "prev_month_str": prev_month_str,
+        "next_month_str": next_month_str,
+    }
+
+
 def get_setting_value(db: Session, key: str, default: Any) -> Any:
     """Retrieve configuration setting from single-row/keyed settings table."""
     setting = db.query(Setting).filter(Setting.key == key).first()
