@@ -33,6 +33,18 @@ Upon initial database migration (`alembic upgrade head`), a default administrato
 
 ---
 
+## Demo data
+
+CFMS includes a deterministic demo seeding CLI script (`app/seed_demo.py`):
+
+```bash
+python -m app.seed_demo          # create demo data
+python -m app.seed_demo --reset  # recreate from scratch
+python -m app.seed_demo --clean  # remove demo data
+```
+
+---
+
 ## Helper Scripts
 
 The project includes shell scripts for Docker setup and environment management:
