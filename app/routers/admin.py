@@ -44,14 +44,25 @@ def list_users(
     q: Any = Query(None),
     role: Any = Query(None),
     status_filter: Any = Query(None, alias="status"),
-    sort_by: str = Query("id"),
-    sort_order: str = Query("asc"),
+    sort_param: str | None = Query(None, alias="sort"),
+    sort_by_param: str | None = Query(None, alias="sort_by"),
+    order_param: str | None = Query(None, alias="order"),
+    sort_order_param: str | None = Query(None, alias="sort_order"),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page_param: str = Query("all", alias="per_page"),
     message: str | None = None,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    sort_by = (sort_param or sort_by_param or "username").lower()
+    sort_order = (order_param or sort_order_param or "asc").lower()
+    if sort_order not in ("asc", "desc"):
+        sort_order = "asc"
+
     query = db.query(User)
 
     q_str = parse_optional_str(q)
@@ -71,18 +82,39 @@ def list_users(
     elif status_str == "inactive":
         query = query.filter(User.is_active == False)
 
-    # Sorting
-    sort_column = getattr(User, sort_by, User.id)
+    # Server-side sorting
+    valid_sorts = {
+        "id": User.id,
+        "username": User.username,
+        "email_or_login": User.email_or_login,
+        "role": User.role,
+        "is_active": User.is_active,
+        "created_at": User.created_at,
+    }
+    col_expr = valid_sorts.get(sort_by, User.username)
+
     if sort_order == "desc":
-        query = query.order_by(sort_column.desc())
+        query = query.order_by(col_expr.desc().nulls_first(), User.id.desc())
     else:
-        query = query.order_by(sort_column.asc())
+        query = query.order_by(col_expr.asc().nulls_last(), User.id.asc())
 
     total_count = query.count()
-    total_pages = max(1, ceil(total_count / per_page))
-    page = min(page, total_pages)
 
-    users = query.offset((page - 1) * per_page).limit(per_page).all()
+    per_page_clean = str(per_page_param).strip().lower()
+    if per_page_clean == "20":
+        page_size = 20
+        total_pages = max(1, ceil(total_count / page_size))
+        curr_page = min(page, total_pages)
+        users = query.offset((curr_page - 1) * page_size).limit(page_size).all()
+        is_paged = True
+    else:
+        page_size = total_count
+        total_pages = 1
+        curr_page = 1
+        if total_count > 1000:
+            logger.warning("Large user list requested without pagination: count=%s", total_count)
+        users = query.all()
+        is_paged = False
 
     return templates.TemplateResponse(
         "admin/users.html",
@@ -97,7 +129,9 @@ def list_users(
                 "status_filter": status_filter,
                 "sort_by": sort_by,
                 "sort_order": sort_order,
-                "page": page,
+                "page": curr_page,
+                "per_page": per_page_clean,
+                "is_paged": is_paged,
                 "total_pages": total_pages,
                 "total_count": total_count,
             },
@@ -435,15 +469,26 @@ def list_computers(
     location: Any = Query(None),
     rtc: Any = Query(None),
     owner_id: Any = Query(None),
-    sort_by: str = Query("hostname"),
-    sort_order: str = Query("asc"),
+    sort_param: str | None = Query(None, alias="sort"),
+    sort_by_param: str | None = Query(None, alias="sort_by"),
+    order_param: str | None = Query(None, alias="order"),
+    sort_order_param: str | None = Query(None, alias="sort_order"),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page_param: str = Query("all", alias="per_page"),
     message: str | None = None,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Computer)
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    sort_by = (sort_param or sort_by_param or "hostname").lower()
+    sort_order = (order_param or sort_order_param or "asc").lower()
+    if sort_order not in ("asc", "desc"):
+        sort_order = "asc"
+
+    query = db.query(Computer).outerjoin(User, Computer.owner_user_id == User.id)
 
     q_str = parse_optional_str(q)
     if q_str:
@@ -466,18 +511,42 @@ def list_computers(
     if parsed_owner_id is not None:
         query = query.filter(Computer.owner_user_id == parsed_owner_id)
 
-    # Sorting
-    sort_column = getattr(Computer, sort_by, Computer.hostname)
+    # Server-side sorting
+    valid_sorts = {
+        "hostname": Computer.hostname,
+        "ip": Computer.ip,
+        "os": Computer.os,
+        "location": Computer.location,
+        "owner": User.username,
+        "is_round_the_clock": Computer.is_round_the_clock,
+        "last_maintenance_at": Computer.last_maintenance_at,
+        "next_maintenance_due_at": Computer.next_maintenance_due_at,
+    }
+    col_expr = valid_sorts.get(sort_by, Computer.hostname)
+
     if sort_order == "desc":
-        query = query.order_by(sort_column.desc())
+        query = query.order_by(col_expr.desc().nulls_first(), Computer.id.desc())
     else:
-        query = query.order_by(sort_column.asc())
+        query = query.order_by(col_expr.asc().nulls_last(), Computer.id.asc())
 
     total_count = query.count()
-    total_pages = max(1, ceil(total_count / per_page))
-    page = min(page, total_pages)
 
-    computers = query.offset((page - 1) * per_page).limit(per_page).all()
+    per_page_clean = str(per_page_param).strip().lower()
+    if per_page_clean == "20":
+        page_size = 20
+        total_pages = max(1, ceil(total_count / page_size))
+        curr_page = min(page, total_pages)
+        computers = query.offset((curr_page - 1) * page_size).limit(page_size).all()
+        is_paged = True
+    else:
+        page_size = total_count
+        total_pages = 1
+        curr_page = 1
+        if total_count > 1000:
+            logger.warning("Large computer list requested without pagination: count=%s", total_count)
+        computers = query.all()
+        is_paged = False
+
     users = db.query(User).filter(User.is_active == True).order_by(User.username.asc()).all()
 
     return templates.TemplateResponse(
@@ -495,7 +564,9 @@ def list_computers(
                 "owner_filter": owner_id,
                 "sort_by": sort_by,
                 "sort_order": sort_order,
-                "page": page,
+                "page": curr_page,
+                "per_page": per_page_clean,
+                "is_paged": is_paged,
                 "total_pages": total_pages,
                 "total_count": total_count,
             },

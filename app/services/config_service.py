@@ -326,7 +326,6 @@ def confirm_import_configuration(
                 next_maintenance_due_at=next_due,
                 status=comp_data.get("status", "active"),
                 notes=comp_data.get("notes"),
-                created_at=datetime.now(timezone.utc),
             )
             db.add(c)
         counts["computers"] += 1

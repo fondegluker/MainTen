@@ -152,6 +152,7 @@ All pull requests and branch merges must pass the following required CI checks i
 - Month view (with align-to-today toggle) and editing of closed events added.
 - Unified Day/Week/Month switcher and 32-cell weekday-aligned month grid added.
 - Full edit of closed events, prev/next navigation on the event page, simplified technician menu, and fix for the unplanned-event 500.
+- Sortable columns on computers and users lists; page size defaults to all rows with a 'show 20' toggle; 'Next maintenance date' column added.
 
 ## Iteration 4 Features & Scope
 

@@ -210,6 +210,21 @@ The repository integrates shell scripts for deployment and local testing:
   - The database row in `maintenance_event_attachments` is NOT auto-deleted, allowing administrators to inspect or re-upload missing files.
   - On the UI event detail page (`event_detail.html`), missing or broken image files trigger an `onerror` fallback rendering a disabled placeholder card with the filename and localized missing file note instead of a broken image link.
 
+## Admin List Sorting, Page Size Default & Next Maintenance Date Column Architectural Decisions
+
+- **"Next Maintenance Date" Column (`computers.next_maintenance_due_at`)**:
+  - Added "Дата следующего ТО" / "Next maintenance date" column on `/admin/computers`, formatting values as `YYYY-MM-DD` or "—" when NULL.
+- **Server-side Sorting & NULL Ordering Convention**:
+  - Supported sortable columns on `/admin/computers` (`hostname`, `ip`, `os`, `location`, `owner`, `is_round_the_clock`, `last_maintenance_at`, `next_maintenance_due_at`) and `/admin/users` (`username`, `email_or_login`, `role`, `is_active`, `created_at`).
+  - URL parameters: `?sort=<column>&order=asc|desc` (accepting `sort_by`/`sort` and `sort_order`/`order`).
+  - Default sorts: `hostname asc` on computers, `username asc` on users.
+  - NULL ordering convention: NULLs placed last in ascending order (`col.asc().nulls_last()`) and first in descending order (`col.desc().nulls_first()`).
+- **Page Size Default (`per_page=all`) & "Show 20" Toggle**:
+  - Default page size for `/admin/computers` and `/admin/users` is `per_page=all` (showing all rows on a single page without pagination controls).
+  - Toggle link on both pages allows switching between `?per_page=all` (all rows) and `?per_page=20` (20 rows per page with standard pagination controls).
+  - Applies exclusively to computers and users lists (does NOT modify pagination on protocol, calendar, or audit log pages).
+  - If total count > 1000 with `per_page=all`, a server-side warning is logged.
+
 ## Iteration 5 Hotfix 3 Architectural Decisions (Full Closed Event Editing, Prev/Next Navigation & Unplanned Event Fix)
 
 - **Full Edit Mode for Maintenance Events (`POST /technician/events/{id}/edit`)**:
