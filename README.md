@@ -43,6 +43,25 @@ The project includes shell scripts for Docker setup and environment management:
 
 ---
 
+## Сервис / Service (Config & Backup)
+
+The Admin Area provides a `/admin/service` dashboard containing two tools:
+
+1. **Configuration Export & Import**:
+   - Reference data included: `settings`, `maintenance_protocol_items`, `working_calendar`, `computers`, `users` (including password hashes). Operational history (`maintenance_events`, `audit_log`, `notifications`) is never modified or deleted.
+   - Archive layout: ZIP containing `configuration.json` (or `configuration.json.enc` if password-protected).
+   - Optional encryption: AES-256-GCM + PBKDF2-HMAC-SHA256. Envelope format:
+     ```
+     ENC1
+     <base64(salt)>
+     <base64(nonce)>
+     <base64(ciphertext)>
+     ```
+
+2. **Full Database & Uploads Backup / Restore**:
+   - Archive layout: ZIP containing `database.sql` (generated via `pg_dump --no-owner --no-privileges`), `uploads/` (copy of attachment volume files), and `manifest.json`. Optional encryption encrypts the entire ZIP archive.
+   - Destructive restore: replaces the entire database schema and uploads directory. Requires typing `RESTORE` in the confirmation input before applying.
+
 ## Attachment Storage
 
 - Maintenance event attachments are stored in the Docker named volume `mainten_uploads` mapped to `/app/uploads` in the application container.

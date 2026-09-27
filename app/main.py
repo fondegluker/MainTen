@@ -3,6 +3,7 @@ from fastapi.responses import RedirectResponse
 
 from app.core.config import settings
 from app.routers.admin import router as admin_router
+from app.routers.admin_service import router as admin_service_router
 from app.routers.agent import router as agent_router
 from app.routers.import_fleet import router as import_router
 from app.routers.technician import router as technician_router
@@ -33,6 +34,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 # Mount web UI, admin, user, technician, and import routers
 app.include_router(web_router)
 app.include_router(admin_router)
+app.include_router(admin_service_router)
 app.include_router(user_router)
 app.include_router(technician_router)
 app.include_router(agent_router)

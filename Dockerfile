@@ -7,6 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Install system dependencies including network tools nmap and arp-scan
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
     build-essential \
     libpq-dev \
     curl \

@@ -177,6 +177,27 @@ The repository integrates shell scripts for deployment and local testing:
   - Date recalculation rule: editing a closed (`done`/`missed`/`cancelled`) event does NOT recalculate the computer's `last_maintenance_at` or `next_maintenance_due_at` (these are fixed at event completion).
   - Audit logging: every edit writes an `audit_log` row with `action = "edit_closed_event"`, actor ID, and `before_json`/`after_json` field diffs.
 
+## Configuration Export/Import & Full DB Backup/Restore Architectural Decisions (§0 - §2)
+
+- **AES-256-GCM + PBKDF2-HMAC-SHA256 Encryption Envelope**:
+  - Implementation: `app/services/crypto_service.py` provides password encryption for archives.
+  - Parameters: PBKDF2-HMAC-SHA256 key derivation with 200,000 iterations, random 16-byte salt, 12-byte random nonce, and 32-byte AESGCM key.
+  - Text envelope format:
+    ```
+    ENC1
+    <base64(salt)>
+    <base64(nonce)>
+    <base64(ciphertext)>
+    ```
+- **Configuration Archive Layout & Natural Key Upserts**:
+  - Layout: single `.zip` containing `configuration.json` or `configuration.json.enc`.
+  - Content: reference data tables (`settings`, `maintenance_protocol_items`, `working_calendar`, `computers`, `users`). Password hashes are exported as-is; security warning displayed on export page. Operational history (`maintenance_events`, `maintenance_event_checks`, `maintenance_event_attachments`, `notifications`, `audit_log`) is excluded and never touched.
+  - Single-transaction upserts on import confirm: `settings.key`, `protocol_items.title_ru`, `working_calendar.date`, `computers.hostname`, `users.username`. Logs `action = "import_configuration"` in `audit_log`.
+- **Full Database & Uploads Backup / Restore Layout & Safeguards**:
+  - Layout: single `.zip` (or `.zip.enc`) containing `database.sql` (generated via `pg_dump --no-owner --no-privileges`), `uploads/` directory copy, and `manifest.json`.
+  - Encryption: the entire ZIP file byte stream is encrypted to `.zip.enc` when password protected.
+  - Destructive restore safeguard: requires the administrator to type `RESTORE` (or `ВОССТАНОВИТЬ`) in the confirmation form input before executing. Logs `action = "restore_backup"` in `audit_log`. Passwords and derived keys are never logged.
+
 ## Attachment Persistence via Named Volume & Missing File Handling
 
 - **Docker Named Volume (`mainten_uploads`)**:
