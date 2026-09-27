@@ -7,37 +7,15 @@
 
 ## Verbatim Traceback
 ```text
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
-    await self.app(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/fastapi/applications.py", line 1054, in __call__
-    await self.app(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 718, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 738, in app
-    await route.handle(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
-    await self.app(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 66, in app
-    response = await func(request)
-  File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 291, in app
-    solved_result = await solve_dependencies(
-  File "/usr/local/lib/python3.12/site-packages/fastapi/dependencies/utils.py", line 623, in solve_dependencies
-    solved = await run_in_threadpool(call, **solved_kwargs)
-  File "/usr/local/lib/python3.12/site-packages/starlette/concurrency.py", line 35, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func, *args)
-  File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 226, in run_sync
-    return func(*args)
-  File "/app/app/routers/technician.py", line 38, in _check_event_access
-    if user.role.value in ["admin", "ADMIN"]:
-       ^^^^^^^^ font AttributeError: 'str' object has no attribute 'value'
+File "app/templates/technician/event_detail.html", line 206, in template
+    {% endif %}
+jinja2.exceptions.TemplateSyntaxError: Encountered unknown tag 'endif'. You probably made a nesting mistake. Jinja is expecting this tag, but currently looking for 'endfor'. The innermost block that needs to be closed is 'for'.
 ```
 
 ## Root Cause
-The `_check_event_access` helper function assumed `user.role` was always an instance of `UserRole` Enum (which has a `.value` attribute), but depending on ORM loading / mock construction, `user.role` can be stored as a raw string (e.g., `'technician'`), causing `user.role.value` to raise an `AttributeError: 'str' object has no attribute 'value'`.
+A stray `{% endif %}` tag was present inside the protocol items `{% for item in protocol_items %}` loop in `app/templates/technician/event_detail.html`. Because the tag was unclosed before line 206, Jinja failed to parse the `{% for %}` loop, causing a `jinja2.exceptions.TemplateSyntaxError` whenever `event_detail.html` was evaluated and resulting in an HTTP 500 Internal Server Error.
 
-## Failing Location
-- **File:** `app/routers/technician.py`
-- **Line:** 38 (in `_check_event_access`)
+## Failing Location & Fix
+- **File:** `app/templates/technician/event_detail.html`
+- **Location:** Line 188
+- **Fix:** Removed the stray `{% endif %}` tag to restore balanced `{% for ... %}` / `{% endfor %}` and `{% if ... %}` / `{% endif %}` nesting. Added a Jinja template compilation smoke test `test_template_compile_smoke` in `tests/integration/test_event_detail_hotfix.py`.

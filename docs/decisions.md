@@ -266,8 +266,8 @@ The repository integrates shell scripts for deployment and local testing:
 ## Event Detail Page HTTP 500 Hotfix & Attribute Extraction Convention
 
 - **Root Cause of HTTP 500 on `/technician/events/{id}`**:
-  The `_check_event_access` helper function accessed `user.role.value`. While ORM objects usually expose string-backed Enum members with `.value`, depending on ORM session deserialization, raw string assignments, or mock instantiation in tests, `user.role` can be stored directly as a raw string (e.g. `'technician'`), raising `AttributeError: 'str' object has no attribute 'value'` and causing a 500 Internal Server Error on every event detail page request.
-- **Defensive Extraction Convention**:
+  A stray `{% endif %}` tag inside the `{% for item in protocol_items %}` loop in `app/templates/technician/event_detail.html` caused a `jinja2.exceptions.TemplateSyntaxError` ("Encountered unknown tag 'endif'"), preventing template compilation and triggering HTTP 500 on every event detail request.
+- **Defensive Extraction & Template Compilation Smoke Testing**:
+  - In Jinja2 templates: Every `{% for %}` and `{% if %}` block must be strictly balanced and tested.
+  - Template compile smoke test: Added `test_template_compile_smoke` in `tests/integration/test_event_detail_hotfix.py` to compile `technician/event_detail.html` using Jinja's `Environment` on every test run.
   - In Python routes: Extract role/status strings via `val.value.lower() if hasattr(val, "value") else str(val).lower()`.
-  - In Jinja2 templates: Extract role/status strings using template variables `{% set user_role_val = (current_user.role.value if hasattr(current_user.role, 'value') else current_user.role)|lower %}` and `{% set event_status_val = (event.status.value if hasattr(event.status, 'value') else event.status)|lower %}` before performing equality or inclusion checks.
-  - Apply guards for all nullable attributes (`event.technician`, `event.computer.owner_user`, `event.scheduled_date`, `event.started_at`, `event.finished_at`) across event detail templates to prevent `UndefinedError` or `AttributeError`.

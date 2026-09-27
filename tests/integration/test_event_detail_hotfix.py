@@ -217,3 +217,12 @@ def test_event_detail_access_permissions_and_render(setup_event_detail_data):
     for ev in events_to_test:
         r = client.get(f"/technician/events/{ev.id}", cookies=observer_cookies)
         assert r.status_code == 403, f"Expected 403 for observer on event {ev.id}, got {r.status_code}"
+
+
+def test_template_compile_smoke():
+    """Smoke test ensuring Jinja2 event detail template compiles without syntax errors."""
+    from jinja2 import Environment, FileSystemLoader
+
+    env = Environment(loader=FileSystemLoader("app/templates"))
+    tmpl = env.get_template("technician/event_detail.html")
+    assert tmpl is not None
