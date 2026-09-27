@@ -132,6 +132,7 @@ All pull requests and branch merges must pass the following required CI checks i
 - Attachment viewer and technician day route alias added.
 - Month view (with align-to-today toggle) and editing of closed events added.
 - Unified Day/Week/Month switcher and 32-cell weekday-aligned month grid added.
+- Full edit of closed events, prev/next navigation on the event page, simplified technician menu, and fix for the unplanned-event 500.
 
 ## Iteration 4 Features & Scope
 

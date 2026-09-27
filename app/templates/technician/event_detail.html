@@ -4,14 +4,36 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
-    <!-- Breadcrumbs / Top nav -->
-    <div class="flex items-center justify-between">
-        <a href="/technician/schedule?date={{ event.scheduled_date.isoformat() }}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400">
+    <!-- Breadcrumbs / Top nav with Prev / Next Event Navigation -->
+    <div class="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <a href="{% if from_param %}/technician/schedule?date={{ from_param }}{% elif event.scheduled_date %}/technician/schedule?date={{ event.scheduled_date.isoformat() }}{% else %}/technician/schedule{% endif %}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400">
             &larr; {{ t('tech_back_to_schedule') }}
         </a>
-        <span class="text-xs text-gray-400">
-            ID: #{{ event.id }}
-        </span>
+
+        <!-- Prev / Next Navigation Controls -->
+        <div class="flex items-center gap-2">
+            {% if prev_event %}
+            <a href="/technician/events/{{ prev_event.id }}{% if from_param %}?from={{ from_param }}{% endif %}" class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors" title="{{ t('tech_prev_event') }}">
+                &larr; {{ t('tech_prev_event') }}
+            </a>
+            {% else %}
+            <span class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed border border-gray-100 dark:border-gray-700 select-none">
+                &larr; {{ t('tech_prev_event') }}
+            </span>
+            {% endif %}
+
+            <span class="text-xs font-mono text-gray-400">#{{ event.id }}</span>
+
+            {% if next_event %}
+            <a href="/technician/events/{{ next_event.id }}{% if from_param %}?from={{ from_param }}{% endif %}" class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors" title="{{ t('tech_next_event') }}">
+                {{ t('tech_next_event') }} &rarr;
+            </a>
+            {% else %}
+            <span class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed border border-gray-100 dark:border-gray-700 select-none">
+                {{ t('tech_next_event') }} &rarr;
+            </span>
+            {% endif %}
+        </div>
     </div>
 
     <!-- Flash messages -->
@@ -124,7 +146,7 @@
     </div>
 
     <!-- Main Form: Protocol Checklist & Finish / Edit -->
-    <form id="checklistForm" method="POST" action="{% if event.status.value == 'in_progress' %}/technician/events/{{ event.id }}/finish{% else %}/technician/events/{{ event.id }}/edit{% endif %}" class="space-y-6">
+    <form id="checklistForm" method="POST" action="{% if event.status.value == 'in_progress' %}/technician/events/{{ event.id }}/finish{% else %}/technician/events/{{ event.id }}/edit{% endif %}" enctype="multipart/form-data" class="space-y-6">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
             <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center justify-between">
                 <span>{{ t('tech_protocol_checklist') }}</span>
@@ -148,14 +170,15 @@
                         </div>
 
                         <!-- Check controls: Radio buttons for Done / Not Done -->
-                        {% if event.status.value == 'in_progress' %}
+                        {% set can_edit = (current_user.role.value in ['admin', 'ADMIN']) or (current_user.id == event.technician_id) %}
+                        {% if event.status.value == 'in_progress' or can_edit %}
                         <div class="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700 self-start sm:self-auto">
                             <label class="inline-flex items-center text-xs font-medium text-green-700 dark:text-green-400 cursor-pointer">
-                                <input type="radio" name="check_{{ item.id }}" value="done" {% if existing_check and existing_check.is_done %}checked{% endif %} required class="text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-600">
+                                <input type="radio" name="check_{{ item.id }}" value="done" {% if existing_check and existing_check.is_done %}checked{% endif %} {% if event.status.value != 'in_progress' %}disabled{% endif %} class="text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-600">
                                 <span class="ml-1.5">{{ t('tech_check_done') }}</span>
                             </label>
                             <label class="inline-flex items-center text-xs font-medium text-red-700 dark:text-red-400 cursor-pointer">
-                                <input type="radio" name="check_{{ item.id }}" value="not_done" {% if existing_check and existing_check.is_done == False %}checked{% endif %} class="text-red-600 focus:ring-red-500 border-gray-300 dark:border-gray-600">
+                                <input type="radio" name="check_{{ item.id }}" value="not_done" {% if existing_check and existing_check.is_done == False %}checked{% endif %} {% if event.status.value != 'in_progress' %}disabled{% endif %} class="text-red-600 focus:ring-red-500 border-gray-300 dark:border-gray-600">
                                 <span class="ml-1.5">{{ t('tech_check_not_done') }}</span>
                             </label>
                         </div>
@@ -179,9 +202,9 @@
                     </div>
 
                     <!-- Item comment input or view -->
-                    {% if event.status.value == 'in_progress' %}
+                    {% if event.status.value == 'in_progress' or can_edit %}
                     <div>
-                        <input type="text" name="comment_{{ item.id }}" value="{{ existing_check.comment if existing_check and existing_check.comment else '' }}" placeholder="{{ t('tech_add_comment') }}" class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500">
+                        <input type="text" name="comment_{{ item.id }}" value="{{ existing_check.comment if existing_check and existing_check.comment else '' }}" placeholder="{{ t('tech_add_comment') }}" {% if event.status.value != 'in_progress' %}disabled{% endif %} class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
                     {% elif existing_check and existing_check.comment %}
                     <p class="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded">
@@ -224,7 +247,7 @@
         </h3>
 
         <!-- Upload Form -->
-        {% if event.status.value in ['planned', 'in_progress'] %}
+        {% if event.status.value in ['planned', 'in_progress'] or can_edit %}
         <form method="POST" action="/technician/events/{{ event.id }}/attachments" enctype="multipart/form-data" class="flex items-center gap-3 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
             <input type="file" name="file" required class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/30 dark:file:text-indigo-300">
             <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg whitespace-nowrap transition-colors">
@@ -536,7 +559,7 @@ function toggleEditMode() {
         overallComment.disabled = !isEditMode;
     }
 
-    const inputs = document.querySelectorAll('#checklistForm input');
+    const inputs = document.querySelectorAll('#checklistForm input, #checklistForm textarea');
     inputs.forEach(inp => {
         inp.disabled = !isEditMode;
     });

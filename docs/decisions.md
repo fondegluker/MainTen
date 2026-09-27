@@ -189,6 +189,25 @@ The repository integrates shell scripts for deployment and local testing:
   - The database row in `maintenance_event_attachments` is NOT auto-deleted, allowing administrators to inspect or re-upload missing files.
   - On the UI event detail page (`event_detail.html`), missing or broken image files trigger an `onerror` fallback rendering a disabled placeholder card with the filename and localized missing file note instead of a broken image link.
 
+## Iteration 5 Hotfix 3 Architectural Decisions (Full Closed Event Editing, Prev/Next Navigation & Unplanned Event Fix)
+
+- **Full Edit Mode for Maintenance Events (`POST /technician/events/{id}/edit`)**:
+  - Full editable payload: all protocol checklist items (`is_done` and `comment` per item), event-level `comment`, and uploading new attachments.
+  - Admin-only editable fields: `scheduled_date` and attachment deletion (`POST /technician/events/{id}/attachments/{att_id}/delete`). Technicians attempting to modify `scheduled_date` receive HTTP 403.
+  - Validation: requires explicit selection (`done` or `not_done`) for all active protocol items in the submitted edit payload; indeterminate items trigger HTTP 422 with localized error messaging.
+  - Immutable attributes: `status`, `computer_id`, `technician_id`, and `is_unplanned` cannot be modified via edit.
+  - Date recalculation rule: editing an event does NOT recalculate computer `last_maintenance_at` or `next_maintenance_due_at`.
+- **Prev / Next Event Navigation on Detail Page**:
+  - Event detail page (`/technician/events/{id}`) renders Previous ("Предыдущая карточка") and Next ("Следующая карточка") navigation arrows.
+  - Scope and ordering: filters events for `event.technician_id` across all statuses (`planned`, `in_progress`, `done`, `missed`, `cancelled`), ordered deterministically by `scheduled_date.asc().nulls_last()`, `scheduled_slot.asc().nulls_last()`, `id.asc()`.
+  - Boundary handling: first event disables "Previous", last event disables "Next".
+  - Context preservation: passes `?from=YYYY-MM-DD` query parameter on navigation arrows to maintain view origin.
+- **Top Navigation Bar Link Simplification**:
+  - Top navigation bar (`app/templates/base.html`) keeps a single entry pointing to `/technician/schedule` ("График техника"). The internal schedule switcher partial (`schedule_switcher.html`) remains the single UI component for toggling between Day, Week, and Month views.
+- **Unplanned Event Protocol Checks & 500 Fix**:
+  - Root cause of 500 error on unplanned event detail page: template code called `event.scheduled_date.isoformat()` without checking if `scheduled_date` is None.
+  - Resolution: updated template logic to guard `event.scheduled_date`, and updated `create_unplanned_event` in `app/routers/technician.py` to automatically pre-populate `MaintenanceEventCheck` rows for all active protocol items upon event creation.
+
 ## Iteration 5 Hotfix 2 Architectural Decisions (Schedule Switcher & Weekday Aligned Month Grid)
 
 - **Unified Schedule View Switcher Partial**:

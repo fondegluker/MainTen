@@ -336,6 +336,16 @@ def create_unplanned_event(
     db.add(event)
     db.flush()
 
+    # Pre-populate MaintenanceEventCheck rows for all active protocol items
+    active_items = db.query(MaintenanceProtocolItem).filter(MaintenanceProtocolItem.is_active == True).all()
+    for item in active_items:
+        chk = MaintenanceEventCheck(
+            event_id=event.id,
+            protocol_item_id=item.id,
+            is_done=False,
+        )
+        db.add(chk)
+
     log_audit(
         db=db,
         actor_user_id=current_user.id,
@@ -361,6 +371,7 @@ def create_unplanned_event(
 def technician_event_detail(
     event_id: int,
     request: Request,
+    from_param: str | None = Query(None, alias="from"),
     message: str | None = None,
     error: str | None = None,
     current_user: User = Depends(require_technician),
@@ -372,6 +383,28 @@ def technician_event_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Мероприятие ТО не найдено")
 
     _check_event_access(event, current_user)
+
+    # Calculate prev and next event for same technician ordered by scheduled_date, scheduled_slot, id
+    tech_events = (
+        db.query(MaintenanceEvent)
+        .filter(MaintenanceEvent.technician_id == event.technician_id)
+        .order_by(
+            MaintenanceEvent.scheduled_date.asc().nulls_last(),
+            MaintenanceEvent.scheduled_slot.asc().nulls_last(),
+            MaintenanceEvent.id.asc(),
+        )
+        .all()
+    )
+
+    prev_event = None
+    next_event = None
+    for idx, ev in enumerate(tech_events):
+        if ev.id == event.id:
+            if idx > 0:
+                prev_event = tech_events[idx - 1]
+            if idx < len(tech_events) - 1:
+                next_event = tech_events[idx + 1]
+            break
 
     # Active protocol items
     active_protocol_items = (
@@ -393,6 +426,9 @@ def technician_event_detail(
             current_user,
             {
                 "event": event,
+                "prev_event": prev_event,
+                "next_event": next_event,
+                "from_param": from_param,
                 "protocol_items": active_protocol_items,
                 "existing_checks": existing_checks,
                 "formatted_date": format_date_localized(event.scheduled_date, locale=active_locale)
@@ -688,6 +724,7 @@ async def upload_event_attachment(
 async def edit_maintenance_event(
     event_id: int,
     request: Request,
+    file: UploadFile | None = File(None),
     comment: str | None = Form(None),
     scheduled_date_str: str | None = Form(None, alias="scheduled_date"),
     current_user: User = Depends(get_current_user),
@@ -740,34 +777,71 @@ async def edit_maintenance_event(
     if comment is not None:
         event.comment = comment.strip() if comment.strip() else None
 
-    # Update protocol checks
+    # Optional file upload during edit
+    if file and file.filename:
+        content_bytes = await file.read()
+        if len(content_bytes) <= MAX_FILE_SIZE_BYTES:
+            content_type = file.content_type.lower() if file.content_type else "application/octet-stream"
+            if any(content_type.startswith(prefix) for prefix in ["image/", "application/pdf", "text/plain"]):
+                os.makedirs(UPLOAD_DIR, exist_ok=True)
+                file_ext = os.path.splitext(file.filename)[1] if file.filename else ""
+                saved_filename = f"{uuid.uuid4().hex}{file_ext}"
+                blob_path = os.path.join(UPLOAD_DIR, saved_filename)
+                with open(blob_path, "wb") as f:
+                    f.write(content_bytes)
+                attachment = MaintenanceEventAttachment(
+                    event_id=event.id,
+                    filename=file.filename or "file",
+                    mime=content_type,
+                    blob_path=blob_path,
+                    uploaded_at=datetime.now(timezone.utc),
+                )
+                db.add(attachment)
+
+    # Validate that all active protocol items have an explicit selection (done or not_done)
     active_items = db.query(MaintenanceProtocolItem).filter(MaintenanceProtocolItem.is_active == True).all()
+    missing_items = []
+    checks_dict = {}
+
     for item in active_items:
         check_key = f"check_{item.id}"
         comment_key = f"comment_{item.id}"
 
-        if check_key in form_data:
+        if check_key not in form_data or form_data[check_key] not in ("done", "not_done"):
+            missing_items.append(item.title_ru)
+        else:
             is_done_val = form_data[check_key] == "done"
             item_comment = str(form_data.get(comment_key, "")).strip() or None
+            checks_dict[item.id] = (is_done_val, item_comment)
 
-            chk = (
-                db.query(MaintenanceEventCheck)
-                .filter(MaintenanceEventCheck.event_id == event.id, MaintenanceEventCheck.protocol_item_id == item.id)
-                .first()
+    if missing_items:
+        active_locale = get_locale(request, current_user.locale)
+        err_msg = translate("all_items_required", active_locale)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=err_msg,
+        )
+
+    # Update protocol checks
+    for item_id, (is_done_val, item_comment) in checks_dict.items():
+        chk = (
+            db.query(MaintenanceEventCheck)
+            .filter(MaintenanceEventCheck.event_id == event.id, MaintenanceEventCheck.protocol_item_id == item_id)
+            .first()
+        )
+        if chk:
+            chk.is_done = is_done_val
+            chk.comment = item_comment
+            chk.checked_at = datetime.now(timezone.utc)
+        else:
+            chk = MaintenanceEventCheck(
+                event_id=event.id,
+                protocol_item_id=item_id,
+                is_done=is_done_val,
+                comment=item_comment,
+                checked_at=datetime.now(timezone.utc),
             )
-            if chk:
-                chk.is_done = is_done_val
-                chk.comment = item_comment
-                chk.checked_at = datetime.now(timezone.utc)
-            else:
-                chk = MaintenanceEventCheck(
-                    event_id=event.id,
-                    protocol_item_id=item.id,
-                    is_done=is_done_val,
-                    comment=item_comment,
-                    checked_at=datetime.now(timezone.utc),
-                )
-                db.add(chk)
+            db.add(chk)
 
     event.updated_at = datetime.now(timezone.utc)
 
@@ -844,6 +918,7 @@ def delete_event_attachment(
 def serve_event_attachment(
     event_id: int,
     att_id: int,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

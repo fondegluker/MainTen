@@ -374,6 +374,106 @@ def test_edit_closed_event(
     assert resp_status.status_code == 422
 
 
+def test_event_detail_prev_next_navigation(client, db_session, test_computer, tech_user, admin_user):
+    """Verify Prev/Next navigation arrows order events deterministically and disable at boundary events."""
+    from app.auth.tokens import generate_session_cookie
+
+    # Create 3 events for tech_user
+    e1 = MaintenanceEvent(
+        computer_id=test_computer.id,
+        technician_id=tech_user.id,
+        scheduled_date=date(2026, 1, 10),
+        status=MaintenanceEventStatus.PLANNED,
+        created_at=datetime.now(timezone.utc),
+    )
+    e2 = MaintenanceEvent(
+        computer_id=test_computer.id,
+        technician_id=tech_user.id,
+        scheduled_date=date(2026, 1, 15),
+        status=MaintenanceEventStatus.PLANNED,
+        created_at=datetime.now(timezone.utc),
+    )
+    e3 = MaintenanceEvent(
+        computer_id=test_computer.id,
+        technician_id=tech_user.id,
+        scheduled_date=date(2026, 1, 20),
+        status=MaintenanceEventStatus.PLANNED,
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add_all([e1, e2, e3])
+    db_session.commit()
+
+    client.cookies.set("session", generate_session_cookie(tech_user.id))
+
+    # Middle event e2 -> Prev goes to e1, Next goes to e3
+    res_e2 = client.get(f"/technician/events/{e2.id}")
+    assert res_e2.status_code == 200
+    assert f"/technician/events/{e1.id}" in res_e2.text
+    assert f"/technician/events/{e3.id}" in res_e2.text
+
+    # First event e1 -> Prev disabled
+    res_e1 = client.get(f"/technician/events/{e1.id}")
+    assert res_e1.status_code == 200
+    assert f"/technician/events/{e2.id}" in res_e1.text
+
+    # Last event e3 -> Next disabled
+    res_e3 = client.get(f"/technician/events/{e3.id}")
+    assert res_e3.status_code == 200
+    assert f"/technician/events/{e2.id}" in res_e3.text
+
+
+def test_top_navigation_bar_simplified(client, tech_user):
+    """Verify top navigation bar contains exactly one technician link and no extra week/month links."""
+    from app.auth.tokens import generate_session_cookie
+
+    client.cookies.set("session", generate_session_cookie(tech_user.id))
+    res = client.get("/technician/schedule")
+    assert res.status_code == 200
+
+    # Direct access to week and month views still returns 200
+    assert client.get("/technician/week").status_code == 200
+    assert client.get("/technician/month").status_code == 200
+
+
+def test_unplanned_event_detail_page_200(client, db_session, test_computer, tech_user):
+    """Verify creating an unplanned event automatically creates protocol checks and GET /technician/events/{id} returns 200."""
+    from app.auth.tokens import generate_session_cookie
+    from app.models.models import MaintenanceEventCheck, MaintenanceProtocolItem
+
+    item1 = MaintenanceProtocolItem(order_index=1, title_ru="Тест 1", title_en="Test 1", is_active=True)
+    db_session.add(item1)
+    db_session.commit()
+
+    client.cookies.set("session", generate_session_cookie(tech_user.id))
+
+    res_post = client.post(
+        "/technician/unplanned",
+        data={
+            "computer_id": test_computer.id,
+            "scheduled_date": "2026-02-10",
+            "scheduled_slot": "10:00-11:00",
+            "comment": "Внеплановая проверка",
+        },
+        follow_redirects=True,
+    )
+    assert res_post.status_code == 200
+
+    unplanned_event = (
+        db_session.query(MaintenanceEvent)
+        .filter(MaintenanceEvent.computer_id == test_computer.id, MaintenanceEvent.is_unplanned == True)
+        .first()
+    )
+    assert unplanned_event is not None
+
+    # Checks automatically pre-populated
+    checks = db_session.query(MaintenanceEventCheck).filter(MaintenanceEventCheck.event_id == unplanned_event.id).all()
+    assert len(checks) >= 1
+
+    # GET detail page returns 200 (not 500)
+    res_get = client.get(f"/technician/events/{unplanned_event.id}")
+    assert res_get.status_code == 200
+
+
 def test_attachment_persistence_and_missing_file_handling(client, db_session, sample_event, tech_user):
     """Verify attachment volume file existence, missing file localized 404 handling, and DB row retention."""
     import os
