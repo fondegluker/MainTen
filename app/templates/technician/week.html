@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('tech_week_view') }} — CFMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with week navigation -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg class="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                {{ t('tech_week_view') }}: {{ week_monday.strftime('%d.%m.%Y') }} — {{ week_sunday.strftime('%d.%m.%Y') }}
+            </h1>
+            {% if target_tech %}
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {{ target_tech.username }} ({{ target_tech.email_or_login }})
+            </p>
+            {% endif %}
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- View toggles -->
+            <div class="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-1">
+                <a href="/technician/schedule?date={{ week_monday.isoformat() }}" class="px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                    {{ t('tech_day_view') }}
+                </a>
+                <a href="/technician/week?date={{ week_monday.isoformat() }}" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs">
+                    {{ t('tech_week_view') }}
+                </a>
+            </div>
+
+            <!-- Week switcher -->
+            <div class="flex items-center gap-1 bg-gray-50 dark:bg-gray-900 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
+                <a href="/technician/week?date={{ prev_week_date }}" class="p-1.5 text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400" title="Предыдущая неделя">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </a>
+                <a href="/technician/week" class="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
+                    Текущая неделя
+                </a>
+                <a href="/technician/week?date={{ next_week_date }}" class="p-1.5 text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400" title="Следующая неделя">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </a>
+            </div>
+
+            <a href="/technician/unplanned" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                {{ t('tech_create_unplanned') }}
+            </a>
+        </div>
+    </div>
+
+    <!-- Admin technician select -->
+    {% if current_user.role.value in ['admin', 'ADMIN'] and all_technicians %}
+    <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 p-4 rounded-xl flex items-center gap-4">
+        <span class="text-sm font-medium text-indigo-900 dark:text-indigo-300">
+            Просмотр графика другого техника (Админ):
+        </span>
+        <form method="GET" action="/technician/week" class="flex items-center gap-2">
+            <input type="hidden" name="date" value="{{ week_monday.isoformat() }}">
+            <select name="technician_id" onchange="this.form.submit()" class="text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                {% for tech in all_technicians %}
+                <option value="{{ tech.id }}" {% if target_tech and target_tech.id == tech.id %}selected{% endif %}>
+                    {{ tech.username }} ({{ tech.email_or_login }})
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- Week Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
+        {% for day in week_days %}
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border {% if day.is_today %}border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-900{% else %}border-gray-100 dark:border-gray-700{% endif %} flex flex-col min-h-[300px]">
+            <!-- Day header -->
+            <div class="p-3 border-b border-gray-100 dark:border-gray-700 {% if day.is_today %}bg-indigo-50 dark:bg-indigo-950/40{% else %}bg-gray-50 dark:bg-gray-900/50{% endif %} rounded-t-xl text-center">
+                <a href="/technician/schedule?date={{ day.date_str }}" class="hover:underline">
+                    <span class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        {{ day.formatted }}
+                    </span>
+                    <span class="block text-lg font-bold text-gray-900 dark:text-white mt-0.5">
+                        {{ day.date.strftime('%d.%m') }}
+                    </span>
+                </a>
+            </div>
+
+            <!-- Events list for day -->
+            <div class="p-3 space-y-3 flex-1 overflow-y-auto">
+                {% if day.events %}
+                    {% for event in day.events %}
+                    <a href="/technician/events/{{ event.id }}" class="block p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors bg-white dark:bg-gray-800 shadow-2xs">
+                        <div class="flex items-center justify-between gap-1 mb-1">
+                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate">
+                                {{ event.computer.hostname }}
+                            </span>
+                            <span class="inline-block w-2 h-2 rounded-full
+                                {% if event.status.value == 'planned' %}bg-blue-500
+                                {% elif event.status.value == 'in_progress' %}bg-yellow-500
+                                {% elif event.status.value == 'done' %}bg-green-500
+                                {% elif event.status.value == 'missed' %}bg-red-500
+                                {% else %}bg-gray-400{% endif %}">
+                            </span>
+                        </div>
+                        <p class="text-2xs text-gray-500 dark:text-gray-400 truncate">
+                            {{ event.computer.location or '—' }}
+                        </p>
+                        {% if event.is_unplanned %}
+                        <span class="inline-block mt-1 text-3xs font-semibold px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 rounded">
+                            Внеплановое
+                        </span>
+                        {% endif %}
+                    </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="h-full flex items-center justify-center text-xs text-gray-400 py-6 text-center italic">
+                        {{ t('tech_no_events_today') }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

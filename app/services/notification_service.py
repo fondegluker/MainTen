@@ -42,8 +42,68 @@ def create_notification(
     return notif
 
 
+def generate_technician_daily_digests(db: Session, today: datetime | None = None) -> list[Notification]:
+    """Generate daily schedule digests for active technicians."""
+    if today is None:
+        today_d = datetime.now(timezone.utc).date()
+    elif isinstance(today, datetime):
+        today_d = today.date()
+    else:
+        today_d = today
+
+    created = []
+    technicians = db.query(User).filter(User.role == UserRole.TECHNICIAN, User.is_active == True).all()
+
+    start_of_day = datetime.combine(today_d, datetime.min.time(), tzinfo=timezone.utc)
+    end_of_day = datetime.combine(today_d, datetime.max.time(), tzinfo=timezone.utc)
+
+    for tech in technicians:
+        events = (
+            db.query(MaintenanceEvent)
+            .filter(
+                MaintenanceEvent.technician_id == tech.id,
+                MaintenanceEvent.scheduled_date == today_d,
+            )
+            .all()
+        )
+        if not events:
+            continue
+
+        sent_today = (
+            db.query(Notification)
+            .filter(
+                Notification.user_id == tech.id,
+                Notification.sent_at >= start_of_day,
+                Notification.sent_at <= end_of_day,
+            )
+            .all()
+        )
+        has_digest = any(
+            n.payload_json and n.payload_json.get("type") == "technician_daily_digest"
+            for n in sent_today
+        )
+
+        if not has_digest:
+            hostnames = [e.computer.hostname for e in events if e.computer]
+            notif = create_notification(
+                db=db,
+                user_id=tech.id,
+                payload={
+                    "type": "technician_daily_digest",
+                    "date": today_d.isoformat(),
+                    "event_count": len(events),
+                    "computers": hostnames,
+                    "message": f"Ваш график на сегодня ({today_d.isoformat()}): {len(events)} мероприятий ТО.",
+                },
+            )
+            created.append(notif)
+
+    return created
+
+
 def process_daily_notifications(db: Session, today: datetime | None = None) -> list[Notification]:
-    """Process daily reminders and escalations for computers in active notification windows.
+    """Process daily reminders and escalations for computers in active notification windows,
+    as well as technician daily schedule digests.
     Idempotent: creates at most one reminder notification per user per computer per calendar day.
     """
     if today is None:
@@ -158,5 +218,8 @@ def process_daily_notifications(db: Session, today: datetime | None = None) -> l
                             },
                         )
                         created_notifications.append(notif)
+
+    digest_notifications = generate_technician_daily_digests(db, today_d)
+    created_notifications.extend(digest_notifications)
 
     return created_notifications

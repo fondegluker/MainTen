@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('tech_event_details') }} #{{ event.id }} — CFMS{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Breadcrumbs / Top nav -->
+    <div class="flex items-center justify-between">
+        <a href="/technician/schedule?date={{ event.scheduled_date.isoformat() }}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400">
+            &larr; {{ t('tech_back_to_schedule') }}
+        </a>
+        <span class="text-xs text-gray-400">
+            ID: #{{ event.id }}
+        </span>
+    </div>
+
+    <!-- Flash messages -->
+    {% if message %}
+    <div class="p-4 text-sm text-green-800 rounded-lg bg-green-50 dark:bg-gray-800 dark:text-green-400 border border-green-200 dark:border-green-800" role="alert">
+        {{ message }}
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400 border border-red-200 dark:border-red-800" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Event Banner & Status Summary -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-3">
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                        {{ event.computer.hostname }}
+                    </h1>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold
+                        {% if event.status.value == 'planned' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
+                        {% elif event.status.value == 'in_progress' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300
+                        {% elif event.status.value == 'done' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
+                        {% elif event.status.value == 'missed' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
+                        {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                        {% if event.status.value == 'planned' %}{{ t('tech_status_planned') }}
+                        {% elif event.status.value == 'in_progress' %}{{ t('tech_status_in_progress') }}
+                        {% elif event.status.value == 'done' %}{{ t('tech_status_done') }}
+                        {% elif event.status.value == 'missed' %}{{ t('tech_status_missed') }}
+                        {% else %}{{ event.status.value }}{% endif %}
+                    </span>
+                    {% if event.is_unplanned %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                        {{ t('tech_is_unplanned') }}
+                    </span>
+                    {% endif %}
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    IP: {{ event.computer.ip or '—' }} | {{ t('comp_location') }}: {{ event.computer.location or '—' }} | OS: {{ event.computer.os or '—' }}
+                </p>
+                {% if event.computer.owner_user %}
+                <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    {{ t('comp_owner') }}: {{ event.computer.owner_user.username }} ({{ event.computer.owner_user.email_or_login }})
+                </p>
+                {% endif %}
+            </div>
+
+            <!-- Action Controls (Start / Missed Reason) -->
+            <div class="flex flex-wrap items-center gap-2">
+                {% if event.status.value == 'planned' %}
+                <form method="POST" action="/technician/events/{{ event.id }}/start">
+                    <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors">
+                        {{ t('tech_start') }}
+                    </button>
+                </form>
+                {% endif %}
+
+                {% if event.status.value in ['planned', 'in_progress'] %}
+                <button type="button" onclick="document.getElementById('missedModal').classList.remove('hidden')" class="px-4 py-2 text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 rounded-lg transition-colors">
+                    {{ t('tech_mark_missed') }}
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500 dark:text-gray-400">
+            <div>
+                <span class="block font-medium text-gray-700 dark:text-gray-300">Дата:</span>
+                {{ formatted_date }}
+            </div>
+            <div>
+                <span class="block font-medium text-gray-700 dark:text-gray-300">Техник:</span>
+                {{ event.technician.username if event.technician else '—' }}
+            </div>
+            <div>
+                <span class="block font-medium text-gray-700 dark:text-gray-300">Начало:</span>
+                {{ event.started_at.strftime('%H:%M %d.%m.%Y') if event.started_at else '—' }}
+            </div>
+            <div>
+                <span class="block font-medium text-gray-700 dark:text-gray-300">Завершено:</span>
+                {{ event.finished_at.strftime('%H:%M %d.%m.%Y') if event.finished_at else '—' }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Form: Protocol Checklist & Finish -->
+    <form method="POST" action="/technician/events/{{ event.id }}/finish" class="space-y-6">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+            <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center justify-between">
+                <span>{{ t('tech_protocol_checklist') }}</span>
+                <span class="text-xs font-normal text-gray-500">Заполните все пункты</span>
+            </h2>
+
+            {% if protocol_items %}
+            <div class="divide-y divide-gray-100 dark:divide-gray-700">
+                {% for item in protocol_items %}
+                {% set existing_check = existing_checks.get(item.id) %}
+                <div class="py-4 space-y-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div class="pr-4">
+                            <span class="text-xs font-semibold text-gray-400">#{{ item.order_index }}</span>
+                            <span class="text-sm font-bold text-gray-900 dark:text-white ml-1">
+                                {% if current_user.locale == 'en' and item.title_en %}{{ item.title_en }}{% else %}{{ item.title_ru }}{% endif %}
+                            </span>
+                            {% if item.description %}
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ item.description }}</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Check controls: Radio buttons for Done / Not Done -->
+                        {% if event.status.value == 'in_progress' %}
+                        <div class="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700 self-start sm:self-auto">
+                            <label class="inline-flex items-center text-xs font-medium text-green-700 dark:text-green-400 cursor-pointer">
+                                <input type="radio" name="check_{{ item.id }}" value="done" {% if existing_check and existing_check.is_done %}checked{% endif %} required class="text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-600">
+                                <span class="ml-1.5">{{ t('tech_check_done') }}</span>
+                            </label>
+                            <label class="inline-flex items-center text-xs font-medium text-red-700 dark:text-red-400 cursor-pointer">
+                                <input type="radio" name="check_{{ item.id }}" value="not_done" {% if existing_check and existing_check.is_done == False %}checked{% endif %} class="text-red-600 focus:ring-red-500 border-gray-300 dark:border-gray-600">
+                                <span class="ml-1.5">{{ t('tech_check_not_done') }}</span>
+                            </label>
+                        </div>
+                        {% else %}
+                        <div>
+                            {% if existing_check %}
+                                {% if existing_check.is_done %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                    {{ t('tech_check_done') }}
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                                    {{ t('tech_check_not_done') }}
+                                </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-xs text-gray-400">—</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Item comment input or view -->
+                    {% if event.status.value == 'in_progress' %}
+                    <div>
+                        <input type="text" name="comment_{{ item.id }}" value="{{ existing_check.comment if existing_check and existing_check.comment else '' }}" placeholder="{{ t('tech_add_comment') }}" class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    {% elif existing_check and existing_check.comment %}
+                    <p class="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Примечание:</span> {{ existing_check.comment }}
+                    </p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-sm text-gray-500 italic">Нет активных пунктов регламента.</p>
+            {% endif %}
+        </div>
+
+        <!-- Event Overall Comment & Finish Action -->
+        {% if event.status.value == 'in_progress' %}
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+            <h3 class="text-sm font-bold text-gray-900 dark:text-white">{{ t('tech_overall_comment') }}</h3>
+            <textarea name="comment" rows="2" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500" placeholder="Общий комментарий к выполненной работе...">{{ event.comment or '' }}</textarea>
+
+            <div class="flex justify-end pt-2">
+                <button type="submit" class="px-6 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-xs transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    {{ t('tech_finish') }}
+                </button>
+            </div>
+        </div>
+        {% endif %}
+    </form>
+
+    <!-- Attachments Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center justify-between">
+            <span>{{ t('tech_attachments') }}</span>
+            <span class="text-xs text-gray-400">({{ event.attachments|length }})</span>
+        </h3>
+
+        <!-- Upload Form -->
+        {% if event.status.value in ['planned', 'in_progress'] %}
+        <form method="POST" action="/technician/events/{{ event.id }}/attachments" enctype="multipart/form-data" class="flex items-center gap-3 bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+            <input type="file" name="file" required class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/30 dark:file:text-indigo-300">
+            <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg whitespace-nowrap transition-colors">
+                {{ t('tech_upload_file') }}
+            </button>
+        </form>
+        {% endif %}
+
+        <!-- List of attachments -->
+        {% if event.attachments %}
+        <ul class="divide-y divide-gray-100 dark:divide-gray-700">
+            {% for att in event.attachments %}
+            <li class="py-2.5 flex items-center justify-between text-xs">
+                <div class="flex items-center space-x-2 truncate">
+                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                    <span class="font-medium text-gray-800 dark:text-gray-200 truncate">{{ att.filename }}</span>
+                    <span class="text-gray-400">({{ att.mime }})</span>
+                </div>
+                <span class="text-gray-400 text-2xs">{{ att.uploaded_at.strftime('%d.%m.%Y %H:%M') }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-xs text-gray-400 italic">Прикрепеления отсутствуют.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal for Missed Reason -->
+<div id="missedModal" class="hidden fixed inset-0 bg-gray-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ t('tech_missed_reason_title') }}</h3>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Укажите причину, по которой обслуживание не было выполнено.</p>
+
+        <form method="POST" action="/technician/events/{{ event.id }}/missed" class="space-y-4">
+            <div>
+                <textarea name="reason" rows="3" required placeholder="Причина пропуска..." class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-red-500 focus:ring-red-500"></textarea>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="document.getElementById('missedModal').classList.add('hidden')" class="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 rounded-lg">
+                    Отмена
+                </button>
+                <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg">
+                    Сохранить
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

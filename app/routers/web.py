@@ -24,11 +24,13 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 def context_with_defaults(request: Request, current_user: User = None, extra: dict = None) -> dict:
+    loc = get_locale(request, current_user.locale if current_user else None)
     ctx = {
         "request": request,
         "current_user": current_user,
-        "locale": get_locale(request, current_user.locale if current_user else None),
+        "locale": loc,
         "translate": translate,
+        "t": lambda key: translate(key, loc),
     }
     if extra:
         ctx.update(extra)

@@ -101,6 +101,21 @@ All pull requests and branch merges must pass the following required CI checks i
   - Handled window states: future window ("Окно выбора откроется <date>"), active window (inline picker), and expired window (escalation message).
   - Added secondary "Информация о моём компьютере" button linking to `/user/my-computers/{id}` showing computer specs and full history.
 
+## Iteration 5 Features & Scope
+
+- **Technician Day & Week Schedule Views**:
+  - `/technician/schedule`: Day view (default today) displaying scheduled maintenance event cards with status badges, computer specs, and location. Admins can switch view to inspect schedule of any active technician.
+  - `/technician/week`: 7-day week schedule view (Monday-Sunday grid) with daily event summaries and day navigation.
+- **Maintenance Execution & Event Details (`/technician/events/{id}`)**:
+  - Full protocol checklist rendering where technician marks each active protocol item as `Done` or `Not Done` with item-specific comments. Form submission requires every active protocol item to be marked.
+  - Attachment upload support for photos/files per event (up to 10MB limit, mime-type checked for images, PDFs, text).
+  - Status transitions: Start (`PLANNED` -> `IN_PROGRESS`), Finish (`IN_PROGRESS` -> `DONE`), and Mark Missed with mandatory reason comment (`PLANNED`/`IN_PROGRESS` -> `MISSED`).
+  - Side effect on Finish: automatically updates computer's `last_maintenance_at` to completion timestamp and recalculates `next_maintenance_due_at` via shared scheduling helper.
+- **Unplanned Maintenance Events (`/technician/unplanned`)**:
+  - Technicians can manually create out-of-schedule maintenance events for any active computer with custom date, time slot, and reasoning. Added `is_unplanned` flag in database schema.
+- **Technician Daily Digest Notifications**:
+  - Extended notification service (`generate_technician_daily_digests`) to send daily schedule digest notifications to active technicians with scheduled events on that calendar day.
+
 ## Iteration 4 Features & Scope
 
 - **Scheduling Engine (`app/services/scheduling_service.py`)**:
@@ -194,6 +209,7 @@ erDiagram
         date scheduled_date
         string scheduled_slot
         enum status
+        boolean is_unplanned
         datetime started_at
         datetime finished_at
         text comment

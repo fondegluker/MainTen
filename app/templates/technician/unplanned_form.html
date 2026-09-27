@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('tech_create_unplanned') }} — CFMS{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <a href="/technician/schedule" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400">
+            &larr; {{ t('tech_back_to_schedule') }}
+        </a>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-6">
+        <div>
+            <h1 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                {{ t('tech_create_unplanned') }}
+            </h1>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Создание внепланового ТО для конкретного компьютера.
+            </p>
+        </div>
+
+        <form method="POST" action="/technician/unplanned" class="space-y-4">
+            <!-- Computer Selection -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    {{ t('tech_select_computer') }} *
+                </label>
+                <select name="computer_id" required class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="">-- {{ t('tech_select_computer') }} --</option>
+                    {% for comp in computers %}
+                    <option value="{{ comp.id }}">
+                        {{ comp.hostname }} ({% if comp.ip %}{{ comp.ip }}{% else %}Без IP{% endif %}, {{ comp.location or 'Без локации' }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Scheduled Date -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    {{ t('tech_scheduled_date') }} *
+                </label>
+                <input type="date" name="scheduled_date" value="{{ today_str }}" required class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+
+            <!-- Scheduled Slot -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Временной слот / Время (необязательно)
+                </label>
+                <input type="text" name="scheduled_slot" placeholder="Например: 10:00 - 11:00" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+
+            <!-- Comment -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    {{ t('tech_comments') }}
+                </label>
+                <textarea name="comment" rows="3" placeholder="Причина проведения внепланового обслуживания..." class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
+                <a href="/technician/schedule" class="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 rounded-lg">
+                    Отмена
+                </a>
+                <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors">
+                    Создать внеплановое ТО
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
