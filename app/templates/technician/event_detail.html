@@ -3,8 +3,9 @@
 {% block title %}{{ t('tech_event_details') }} #{{ event.id }} — CFMS{% endblock %}
 
 {% block content %}
-{% set user_role_val = (current_user.role.value if hasattr(current_user.role, 'value') else current_user.role)|lower %}
-{% set event_status_val = (event.status.value if hasattr(event.status, 'value') else event.status)|lower %}
+{# Jinja has no `hasattr`. Use `is defined` or direct attribute access. #}
+{% set user_role_val = (current_user.role.value if current_user.role.value is defined else current_user.role)|string|lower %}
+{% set event_status_val = (event.status.value if event.status.value is defined else event.status)|string|lower %}
 {% set can_edit = (user_role_val == 'admin') or (event.technician_id and current_user.id == event.technician_id) %}
 
 <div class="max-w-4xl mx-auto space-y-6">
@@ -69,7 +70,7 @@
                         {% elif event_status_val == 'in_progress' %}{{ t('tech_status_in_progress') }}
                         {% elif event_status_val == 'done' %}{{ t('tech_status_done') }}
                         {% elif event_status_val == 'missed' %}{{ t('tech_status_missed') }}
-                        {% else %}{{ event.status.value }}{% endif %}
+                        {% else %}{{ event_status_val }}{% endif %}
                     </span>
                     {% if event.is_unplanned %}
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
@@ -275,7 +276,7 @@
                                         <span class="text-3xs text-white truncate font-medium">{{ att.filename }}</span>
                                     </div>
                                 </div>
-                    {% if loop.last or not (event.attachments[loop.index] is defined) %}
+                    {% if loop.last %}
                             </div>
                         </div>
                     {% endif %}
@@ -607,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Toggle overall comment enabled state for in_progress events on load
+// Toggle overall comment enabled state for non-in_progress events on load
 document.addEventListener('DOMContentLoaded', () => {
     const eventStatus = "{{ event_status_val }}";
     const overallComment = document.getElementById('overallComment');
