@@ -228,7 +228,6 @@ def seed_demo(db: Session) -> dict:
                 last_maintenance_at=last_maint,
                 status="active",
                 notes="seeded-by-seed_demo",
-                created_at=today_dt,
             )
             db.add(comp)
             db.flush()

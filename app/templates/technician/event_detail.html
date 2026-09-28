@@ -289,7 +289,7 @@
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {% for img in images %}
                     <div onclick="openLightbox({{ loop.index0 }})" class="group cursor-pointer rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-gray-50 dark:bg-gray-900 relative aspect-square max-w-[200px]">
-                        <img src="/technician/events/{{ event.id }}/attachments/{{ img.id }}" alt="{{ img.filename }}" onerror="this.onerror=null; this.parentElement.onclick=null; this.parentElement.className='p-2 rounded-lg border border-red-200 bg-red-50 text-red-700 aspect-square max-w-[200px] flex flex-col justify-center text-center'; this.parentElement.innerHTML='<span class=\'font-bold text-3xs truncate\'>{{ img.filename }}</span><span class=\'text-3xs text-red-500 mt-1\'>{{ t(\'file_missing_on_server\') }}</span>';" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
+                        <img src="/technician/events/{{ event.id }}/attachments/{{ img.id }}" alt="{{ img.filename }}" data-fallback-filename="{{ img.filename }}" data-fallback-msg="{{ t('file_missing_on_server') }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
                         <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
                             <span class="text-3xs text-white truncate font-medium">{{ img.filename }}</span>
                         </div>
@@ -568,5 +568,29 @@ function toggleEditMode() {
         inp.disabled = !isEditMode;
     });
 }
+
+// Fallback handler for missing image attachments
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('img[data-fallback-filename]').forEach(img => {
+        img.addEventListener('error', () => {
+            const wrap = img.parentElement;
+            if (!wrap) return;
+            wrap.onclick = null;
+            wrap.className = 'p-2 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 aspect-square max-w-[200px] flex flex-col justify-center text-center';
+            wrap.innerHTML = '';
+
+            const fnSpan = document.createElement('span');
+            fnSpan.className = 'font-bold text-3xs truncate';
+            fnSpan.textContent = img.dataset.fallbackFilename || '';
+
+            const msgSpan = document.createElement('span');
+            msgSpan.className = 'text-3xs text-red-500 mt-1';
+            msgSpan.textContent = img.dataset.fallbackMsg || 'Файл не найден';
+
+            wrap.appendChild(fnSpan);
+            wrap.appendChild(msgSpan);
+        }, { once: true });
+    });
+});
 </script>
 {% endblock %}
