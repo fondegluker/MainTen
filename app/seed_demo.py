@@ -282,7 +282,7 @@ def seed_demo(db: Session) -> dict:
                 chk = MaintenanceEventCheck(
                     event_id=event.id,
                     protocol_item_id=p_item.id,
-                    is_done=None,
+                    is_done=False,
                 )
                 db.add(chk)
 
@@ -317,7 +317,7 @@ def seed_demo(db: Session) -> dict:
             chk = MaintenanceEventCheck(
                 event_id=unplanned_event.id,
                 protocol_item_id=p_item.id,
-                is_done=None,
+                is_done=False,
             )
             db.add(chk)
 

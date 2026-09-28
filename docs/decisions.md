@@ -267,7 +267,10 @@ The repository integrates shell scripts for deployment and local testing:
 
 - **Root Cause of HTTP 500 on `/technician/events/{id}`**:
   A stray `{% endif %}` tag inside the `{% for item in protocol_items %}` loop in `app/templates/technician/event_detail.html` caused a `jinja2.exceptions.TemplateSyntaxError` ("Encountered unknown tag 'endif'"), preventing template compilation and triggering HTTP 500 on every event detail request.
-- **Defensive Extraction & Template Compilation Smoke Testing**:
+- **Automatic Demo Seeding (`app/seed_demo.py` & `run.sh`)**:
+  - `app/seed_demo.py` provides deterministic demo data (tech_demo, user_demo, 5 DEMO-PC-* computers, 6 events).
+  - `run.sh` automatically executes `docker compose exec -T web python -m app.seed_demo` upon startup unless `SEED_DEMO=0` is set.
+- **Defensive Extraction & Permanent Template Compilation Smoke Testing**:
   - In Jinja2 templates: Every `{% for %}` and `{% if %}` block must be strictly balanced and tested.
-  - Template compile smoke test: Added `test_template_compile_smoke` in `tests/integration/test_event_detail_hotfix.py` to compile `technician/event_detail.html` using Jinja's `Environment` on every test run.
+  - Template compile smoke test: Added `tests/unit/test_templates_compile.py` to recursively compile all HTML templates under `app/templates` on every test run.
   - In Python routes: Extract role/status strings via `val.value.lower() if hasattr(val, "value") else str(val).lower()`.

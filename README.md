@@ -35,13 +35,22 @@ Upon initial database migration (`alembic upgrade head`), a default administrato
 
 ## Demo data
 
-CFMS includes a deterministic demo seeding CLI script (`app/seed_demo.py`):
+CFMS includes a deterministic demo seeding CLI script (`app/seed_demo.py`) that runs automatically on local startup via `run.sh`:
 
 ```bash
+SEED_DEMO=0 ./run.sh             # skip demo seeding on startup
+./run.sh                         # run with demo data (default)
+
+# Manual CLI commands:
 python -m app.seed_demo          # create demo data
 python -m app.seed_demo --reset  # recreate from scratch
 python -m app.seed_demo --clean  # remove demo data
 ```
+
+### Demo Credentials
+- **Admin**: `admin` / `admin123`
+- **Technician**: `tech_demo` / `tech_demo123`
+- **User (Owner)**: `user_demo` / `user_demo123`
 
 ---
 
