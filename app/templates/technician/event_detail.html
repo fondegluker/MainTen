@@ -14,7 +14,6 @@
             &larr; {{ t('tech_back_to_schedule') }}
         </a>
 
-        <!-- Prev / Next Navigation Controls -->
         <div class="flex items-center gap-2">
             {% if prev_event %}
             <a href="/technician/events/{{ prev_event.id }}{% if from_param %}?from={{ from_param }}{% endif %}" class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors" title="{{ t('tech_prev_event') }}">
@@ -61,15 +60,15 @@
                         {{ event.computer.hostname }}
                     </h1>
                     <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold
-                        {% if event.status.value == 'planned' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
-                        {% elif event.status.value == 'in_progress' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300
-                        {% elif event.status.value == 'done' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
-                        {% elif event.status.value == 'missed' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
+                        {% if event_status_val == 'planned' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
+                        {% elif event_status_val == 'in_progress' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300
+                        {% elif event_status_val == 'done' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
+                        {% elif event_status_val == 'missed' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
                         {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
-                        {% if event.status.value == 'planned' %}{{ t('tech_status_planned') }}
-                        {% elif event.status.value == 'in_progress' %}{{ t('tech_status_in_progress') }}
-                        {% elif event.status.value == 'done' %}{{ t('tech_status_done') }}
-                        {% elif event.status.value == 'missed' %}{{ t('tech_status_missed') }}
+                        {% if event_status_val == 'planned' %}{{ t('tech_status_planned') }}
+                        {% elif event_status_val == 'in_progress' %}{{ t('tech_status_in_progress') }}
+                        {% elif event_status_val == 'done' %}{{ t('tech_status_done') }}
+                        {% elif event_status_val == 'missed' %}{{ t('tech_status_missed') }}
                         {% else %}{{ event.status.value }}{% endif %}
                     </span>
                     {% if event.is_unplanned %}
@@ -125,7 +124,6 @@
             </form>
         </div>
         {% endif %}
-        </div>
 
         <div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500 dark:text-gray-400">
             <div>
@@ -171,8 +169,6 @@
                             {% endif %}
                         </div>
 
-                        <!-- Check controls: Radio buttons for Done / Not Done -->
-                        {% set can_edit = (user_role_val == 'admin') or (event.technician_id and current_user.id == event.technician_id) %}
                         {% if event_status_val == 'in_progress' or can_edit %}
                         <div class="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700 self-start sm:self-auto">
                             <label class="inline-flex items-center text-xs font-medium text-green-700 dark:text-green-400 cursor-pointer">
@@ -203,7 +199,6 @@
                         {% endif %}
                     </div>
 
-                    <!-- Item comment input or view -->
                     {% if event_status_val == 'in_progress' or can_edit %}
                     <div>
                         <input type="text" name="comment_{{ item.id }}" value="{{ existing_check.comment if existing_check and existing_check.comment else '' }}" placeholder="{{ t('tech_add_comment') }}" {% if event_status_val != 'in_progress' %}disabled{% endif %} class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500">
@@ -260,104 +255,116 @@
 
         <!-- Categorized List of Attachments -->
         {% if event.attachments %}
-            {% set images = [] %}
-            {% set text_files = [] %}
-            {% set pdf_files = [] %}
-            {% set other_files = [] %}
+        <div class="space-y-6">
+            {% set ns = namespace(has_images=false, has_text=false, has_pdf=false, has_other=false) %}
 
+            {# 1. Image Thumbnail Grid & Lightbox #}
             {% for att in event.attachments %}
-                {% set ext = att.filename.split('.')[-1].lower() if '.' in att.filename else '' %}
-                {% set mime = att.mime.lower() if att.mime else '' %}
-
-                {% if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'] or mime.startswith('image/') %}
-                    {% set _ = images.append(att) %}
-                {% elif ext in ['txt', 'log', 'md', 'csv'] or mime in ['text/plain', 'text/markdown', 'text/csv'] %}
-                    {% set _ = text_files.append(att) %}
-                {% elif ext == 'pdf' or mime == 'application/pdf' %}
-                    {% set _ = pdf_files.append(att) %}
-                {% else %}
-                    {% set _ = other_files.append(att) %}
+                {% set mime = (att.mime or '')|lower %}
+                {% set ext = (att.filename.rsplit('.', 1)[-1] if '.' in att.filename else '')|lower %}
+                {% if mime.startswith('image/') or ext in ['jpg','jpeg','png','gif','webp','bmp','svg'] %}
+                    {% if not ns.has_images %}
+                        {% set ns.has_images = true %}
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Изображения</h4>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {% endif %}
+                                <div onclick="openLightbox({{ loop.index0 }})" class="group cursor-pointer rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-gray-50 dark:bg-gray-900 relative aspect-square max-w-[200px]">
+                                    <img src="/technician/events/{{ event.id }}/attachments/{{ att.id }}" alt="{{ att.filename }}" data-fallback-filename="{{ att.filename }}" data-fallback-msg="{{ t('file_missing_on_server') }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
+                                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                                        <span class="text-3xs text-white truncate font-medium">{{ att.filename }}</span>
+                                    </div>
+                                </div>
+                    {% if loop.last or not (event.attachments[loop.index] is defined) %}
+                            </div>
+                        </div>
+                    {% endif %}
                 {% endif %}
             {% endfor %}
 
-            <!-- 1. Image Thumbnail Grid & Lightbox -->
-            {% if images %}
-            <div class="space-y-2">
-                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Изображения ({{ images|length }})</h4>
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {% for img in images %}
-                    <div onclick="openLightbox({{ loop.index0 }})" class="group cursor-pointer rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-gray-50 dark:bg-gray-900 relative aspect-square max-w-[200px]">
-                        <img src="/technician/events/{{ event.id }}/attachments/{{ img.id }}" alt="{{ img.filename }}" data-fallback-filename="{{ img.filename }}" data-fallback-msg="{{ t('file_missing_on_server') }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
-                        <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                            <span class="text-3xs text-white truncate font-medium">{{ img.filename }}</span>
+            {# 2. Text Files List #}
+            {% for att in event.attachments %}
+                {% set mime = (att.mime or '')|lower %}
+                {% set ext = (att.filename.rsplit('.', 1)[-1] if '.' in att.filename else '')|lower %}
+                {% if not (mime.startswith('image/') or ext in ['jpg','jpeg','png','gif','webp','bmp','svg']) and (mime.startswith('text/') or ext in ['txt','log','md','csv']) %}
+                    {% if not ns.has_text %}
+                        {% set ns.has_text = true %}
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Текстовые файлы</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {% endif %}
+                                <button type="button" onclick='openTextModal({{ att.filename|tojson }}, {{ ("/technician/events/" ~ event.id ~ "/attachments/" ~ att.id)|tojson }})' class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 hover:border-indigo-500 dark:hover:border-indigo-400 text-left transition-colors">
+                                    <div class="flex items-center space-x-2 truncate">
+                                        <svg class="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                        <span class="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{{ att.filename }}</span>
+                                    </div>
+                                    <span class="text-3xs text-indigo-600 dark:text-indigo-400 font-semibold ml-2">Просмотр &rarr;</span>
+                                </button>
+                    {% if loop.last %}
+                            </div>
                         </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
 
-            <!-- 2. Text Files List -->
-            {% if text_files %}
-            <div class="space-y-2">
-                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Текстовые файлы ({{ text_files|length }})</h4>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {% for txt in text_files %}
-                    <button type="button" onclick="openTextModal('{{ txt.filename }}', '/technician/events/{{ event.id }}/attachments/{{ txt.id }}')" class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 hover:border-indigo-500 dark:hover:border-indigo-400 text-left transition-colors">
-                        <div class="flex items-center space-x-2 truncate">
-                            <svg class="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                            <span class="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{{ txt.filename }}</span>
+            {# 3. PDF Files List #}
+            {% for att in event.attachments %}
+                {% set mime = (att.mime or '')|lower %}
+                {% set ext = (att.filename.rsplit('.', 1)[-1] if '.' in att.filename else '')|lower %}
+                {% if not (mime.startswith('image/') or ext in ['jpg','jpeg','png','gif','webp','bmp','svg']) and not (mime.startswith('text/') or ext in ['txt','log','md','csv']) and (mime == 'application/pdf' or ext == 'pdf') %}
+                    {% if not ns.has_pdf %}
+                        {% set ns.has_pdf = true %}
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">PDF Документы</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {% endif %}
+                                <button type="button" onclick='openPdfModal({{ att.filename|tojson }}, {{ ("/technician/events/" ~ event.id ~ "/attachments/" ~ att.id)|tojson }})' class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 hover:border-indigo-500 dark:hover:border-indigo-400 text-left transition-colors">
+                                    <div class="flex items-center space-x-2 truncate">
+                                        <svg class="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2h-5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                        <span class="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{{ att.filename }}</span>
+                                    </div>
+                                    <span class="text-3xs text-indigo-600 dark:text-indigo-400 font-semibold ml-2">Открыть PDF &rarr;</span>
+                                </button>
+                    {% if loop.last %}
+                            </div>
                         </div>
-                        <span class="text-3xs text-indigo-600 dark:text-indigo-400 font-semibold ml-2">Просмотр &rarr;</span>
-                    </button>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
 
-            <!-- 3. PDF Files List -->
-            {% if pdf_files %}
-            <div class="space-y-2">
-                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">PDF Документы ({{ pdf_files|length }})</h4>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {% for pdf in pdf_files %}
-                    <button type="button" onclick="openPdfModal('{{ pdf.filename }}', '/technician/events/{{ event.id }}/attachments/{{ pdf.id }}')" class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 hover:border-indigo-500 dark:hover:border-indigo-400 text-left transition-colors">
-                        <div class="flex items-center space-x-2 truncate">
-                            <svg class="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2h-5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                            <span class="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{{ pdf.filename }}</span>
+            {# 4. Other Files List #}
+            {% for att in event.attachments %}
+                {% set mime = (att.mime or '')|lower %}
+                {% set ext = (att.filename.rsplit('.', 1)[-1] if '.' in att.filename else '')|lower %}
+                {% if not (mime.startswith('image/') or ext in ['jpg','jpeg','png','gif','webp','bmp','svg']) and not (mime.startswith('text/') or ext in ['txt','log','md','csv']) and not (mime == 'application/pdf' or ext == 'pdf') %}
+                    {% if not ns.has_other %}
+                        {% set ns.has_other = true %}
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Другие файлы</h4>
+                            <ul class="divide-y divide-gray-100 dark:divide-gray-700">
+                    {% endif %}
+                                <li class="py-2 flex items-center justify-between text-xs">
+                                    <span class="font-medium text-gray-800 dark:text-gray-200 truncate">{{ att.filename }}</span>
+                                    <div class="flex items-center gap-2">
+                                        <a href="/technician/events/{{ event.id }}/attachments/{{ att.id }}" download class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">
+                                            {{ t('att_download') }}
+                                        </a>
+                                        {% if user_role_val == 'admin' %}
+                                        <form method="POST" action="/technician/events/{{ event.id }}/attachments/{{ att.id }}/delete" class="inline">
+                                            <button type="submit" onclick="return confirm('Удалить вложение?')" class="text-red-600 hover:text-red-800 text-xs font-semibold">Удалить</button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </li>
+                    {% if loop.last %}
+                            </ul>
                         </div>
-                        <span class="text-3xs text-indigo-600 dark:text-indigo-400 font-semibold ml-2">Открыть PDF &rarr;</span>
-                    </button>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- 4. Other Files List -->
-            {% if other_files %}
-            <div class="space-y-2">
-                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Другие файлы ({{ other_files|length }})</h4>
-                <ul class="divide-y divide-gray-100 dark:divide-gray-700">
-                    {% for file in other_files %}
-                    <li class="py-2 flex items-center justify-between text-xs">
-                        <span class="font-medium text-gray-800 dark:text-gray-200 truncate">{{ file.filename }}</span>
-                        <div class="flex items-center gap-2">
-                            <a href="/technician/events/{{ event.id }}/attachments/{{ file.id }}" download class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">
-                                {{ t('att_download') }}
-                            </a>
-                            {% if current_user.role.value in ['admin', 'ADMIN'] %}
-                            <form method="POST" action="/technician/events/{{ event.id }}/attachments/{{ file.id }}/delete" class="inline">
-                                <button type="submit" onclick="return confirm('Удалить вложение?')" class="text-red-600 hover:text-red-800 text-xs font-semibold">Удалить</button>
-                            </form>
-                            {% endif %}
-                        </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        </div>
         {% else %}
-        <p class="text-xs text-gray-400 italic">Прикрепеления отсутствуют.</p>
+        <p class="text-xs text-gray-400 italic">Прикрепления отсутствуют.</p>
         {% endif %}
     </div>
 </div>
@@ -442,14 +449,24 @@
 </div>
 
 <script>
-// Image Lightbox Logic (< 100 lines)
-const imageList = [
-    {% if images %}
-    {% for img in images %}
-    { url: "/technician/events/{{ event.id }}/attachments/{{ img.id }}", filename: "{{ img.filename }}" },
+// Build the image list for the lightbox from the server-rendered
+// attachments. Using tojson prevents JS breakage on quotes/backslashes.
+const allAttachments = [
+    {% for att in event.attachments %}
+    {
+        id: {{ att.id }},
+        filename: {{ att.filename|tojson }},
+        url: {{ ("/technician/events/" ~ event.id ~ "/attachments/" ~ att.id)|tojson }},
+        mime: {{ ((att.mime or '')|lower)|tojson }},
+        ext: {{ ((att.filename.rsplit('.', 1)[-1] if '.' in att.filename else '')|lower)|tojson }}
+    }{% if not loop.last %},{% endif %}
     {% endfor %}
-    {% endif %}
 ];
+
+const imageList = allAttachments.filter(a =>
+    a.mime.startsWith('image/') ||
+    ['jpg','jpeg','png','gif','webp','bmp','svg'].includes(a.ext)
+);
 let currentImgIndex = 0;
 
 function openLightbox(index) {
@@ -513,13 +530,12 @@ function openTextModal(filename, url) {
                 truncated = true;
             }
             const decoder = new TextDecoder('utf-8');
-            const textContent = decoder.decode(sliceBuffer);
-            document.getElementById('textModalContent').textContent = textContent;
+            document.getElementById('textModalContent').textContent = decoder.decode(sliceBuffer);
             if (truncated) {
                 document.getElementById('textTruncatedNotice').classList.remove('hidden');
             }
         })
-        .catch(err => {
+        .catch(() => {
             document.getElementById('textModalContent').textContent = "{{ t('file_missing_on_server') }}";
         });
 }
@@ -589,6 +605,15 @@ document.addEventListener('DOMContentLoaded', () => {
             wrap.appendChild(msgSpan);
         }, { once: true });
     });
+});
+
+// Toggle overall comment enabled state for in_progress events on load
+document.addEventListener('DOMContentLoaded', () => {
+    const eventStatus = "{{ event_status_val }}";
+    const overallComment = document.getElementById('overallComment');
+    if (overallComment && eventStatus !== 'in_progress') {
+        overallComment.disabled = true;
+    }
 });
 </script>
 {% endblock %}
