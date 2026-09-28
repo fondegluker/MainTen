@@ -85,23 +85,27 @@ def technician_day_schedule(
     else:
         target_date = today_d
 
-    # Determine target technician
-    if current_user.role.value in ["admin", "ADMIN"] and technician_id:
-        target_tech_id = technician_id
+    role_val = current_user.role.value.lower() if hasattr(current_user.role, "value") else str(current_user.role).lower()
+
+    # Determine target technician or view all if admin without explicit technician_id filter
+    query = db.query(MaintenanceEvent).filter(MaintenanceEvent.scheduled_date == target_date)
+
+    if role_val == "admin":
+        if technician_id:
+            target_tech_id = technician_id
+            target_tech = db.query(User).filter(User.id == target_tech_id).first()
+            query = query.filter(MaintenanceEvent.technician_id == target_tech_id)
+        else:
+            target_tech_id = None
+            target_tech = None
     else:
         target_tech_id = current_user.id
+        target_tech = db.query(User).filter(User.id == target_tech_id).first()
+        query = query.filter(MaintenanceEvent.technician_id == target_tech_id)
 
-    target_tech = db.query(User).filter(User.id == target_tech_id).first()
-
-    events = (
-        db.query(MaintenanceEvent)
-        .filter(
-            MaintenanceEvent.technician_id == target_tech_id,
-            MaintenanceEvent.scheduled_date == target_date,
-        )
-        .order_by(MaintenanceEvent.scheduled_slot.asc().nulls_last(), MaintenanceEvent.id.asc())
-        .all()
-    )
+    events = query.order_by(
+        MaintenanceEvent.scheduled_slot.asc().nulls_last(), MaintenanceEvent.id.asc()
+    ).all()
 
     prev_date = (target_date - timedelta(days=1)).isoformat()
     next_date = (target_date + timedelta(days=1)).isoformat()

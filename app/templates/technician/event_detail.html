@@ -3,6 +3,10 @@
 {% block title %}{{ t('tech_event_details') }} #{{ event.id }} — CFMS{% endblock %}
 
 {% block content %}
+{% set user_role_val = (current_user.role.value if hasattr(current_user.role, 'value') else current_user.role)|lower %}
+{% set event_status_val = (event.status.value if hasattr(event.status, 'value') else event.status)|lower %}
+{% set can_edit = (user_role_val == 'admin') or (event.technician_id and current_user.id == event.technician_id) %}
+
 <div class="max-w-4xl mx-auto space-y-6">
     <!-- Breadcrumbs / Top nav with Prev / Next Event Navigation -->
     <div class="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -86,10 +90,6 @@
 
             <!-- Action Controls (Start / Missed Reason / Edit Mode Toggle) -->
             <div class="flex flex-wrap items-center gap-2">
-                {% set user_role_val = (current_user.role.value if hasattr(current_user.role, 'value') else current_user.role)|lower %}
-                {% set event_status_val = (event.status.value if hasattr(event.status, 'value') else event.status)|lower %}
-                {% set can_edit = (user_role_val == 'admin') or (event.technician_id and current_user.id == event.technician_id) %}
-
                 {% if event_status_val == 'planned' %}
                 <form method="POST" action="/technician/events/{{ event.id }}/start">
                     <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors">
@@ -114,8 +114,6 @@
         </div>
 
         <!-- Admin Date Edit Form (when in edit mode) -->
-        {% set user_role_val = (current_user.role.value if hasattr(current_user.role, 'value') else current_user.role)|lower %}
-        {% set event_status_val = (event.status.value if hasattr(event.status, 'value') else event.status)|lower %}
         {% if user_role_val == 'admin' %}
         <div id="adminDateForm" class="hidden mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg">
             <form method="POST" action="/technician/events/{{ event.id }}/edit" class="flex items-center gap-3">
