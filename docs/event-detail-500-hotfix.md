@@ -12,23 +12,29 @@ docker compose down -v
 # or: python -m app.seed_demo
 ```
 
-## Verbatim Traceback
-```text
-File "app/templates/technician/event_detail.html", line 292, in template
-    <img src="/technician/events/{{ event.id }}/attachments/{{ img.id }}" alt="{{ img.filename }}" onerror="this.onerror=null; this.parentElement.onclick=null; this.parentElement.className='...'; this.parentElement.innerHTML='<span class=\'font-bold text-3xs truncate\'>{{ img.filename }}</span>...';" ...>
-jinja2.exceptions.TemplateSyntaxError: unexpected char '\' at 20908
-```
+## Verbatim Traceback & Root Causes
+1. **`TemplateSyntaxError` from JS quote escaping:**
+   ```text
+   File "app/templates/technician/event_detail.html", line 292, in template
+       <img src="/technician/events/{{ event.id }}/attachments/{{ img.id }}" alt="{{ img.filename }}" onerror="this.onerror=null; this.parentElement.onclick=null; this.parentElement.className='...'; this.parentElement.innerHTML='<span class=\'font-bold text-3xs truncate\'>{{ img.filename }}</span>...';" ...>
+   jinja2.exceptions.TemplateSyntaxError: unexpected char '\' at 20908
+   ```
+   *Root Cause:* Escaped single quotes (`\'`) inside an inline HTML `onerror="..."` attribute broke Jinja's parser because Jinja does not treat `\` as an escape character in raw template text.
 
-## Root Cause
-The `onerror="..."` attribute on the attachment `<img>` element in `app/templates/technician/event_detail.html` used JS-style single quote escapes (`\'`). Jinja2's parser does not treat `\` as an escape character in raw template text, resulting in a `jinja2.exceptions.TemplateSyntaxError` at parse time whenever the template was loaded.
+2. **`UndefinedError: 'hasattr' is undefined`:**
+   *Root Cause:* `hasattr` is a Python built-in function and is not available in Jinja2 template context. Attempting to call `hasattr(user.role, 'value')` raised an `UndefinedError`.
 
-## Fix Applied
+3. **Empty attachment lists from mutation syntax:**
+   *Root Cause:* Calling `{% set _ = list.append(...) %}` in Jinja does not mutate list variables across loop iterations as expected.
+
+## Fixes Applied
 1. **`app/templates/technician/event_detail.html`**:
-   - Removed the inline `onerror="..."` attribute containing `\'` escapes.
-   - Added `data-fallback-filename="{{ img.filename }}"` and `data-fallback-msg="{{ t('file_missing_on_server') }}"` attributes to the `<img>` tag.
-   - Added a clean DOM event listener (`addEventListener('error')`) in a `<script>` block to safely create fallback elements using `document.createElement('span')` without string escapes.
+   - Replaced inline `onerror="..."` handler with `data-fallback-filename` and `data-fallback-msg` attributes on `<img>` elements, handled via a DOM `addEventListener('error')` script.
+   - Removed all occurrences of `hasattr` and replaced with standard attribute checks/variable assignments at the top level of `{% block content %}`.
+   - Removed `{% set _ = list.append(...) %}` syntax.
 2. **`app/seed_demo.py`**:
    - Removed invalid `created_at` keyword argument from `Computer(...)` constructor.
-   - Changed `is_done=None` to `is_done=False` on `MaintenanceEventCheck` instances to adhere to the NOT NULL column constraint.
-3. **`tests/unit/test_templates_compile.py`**:
-   - Added permanent template compilation smoke test `test_all_templates_compile()` to verify every `.html` template under `app/templates/` compiles cleanly via Jinja2.
+   - Set `is_done=False` on `MaintenanceEventCheck` instances to adhere to PostgreSQL `NOT NULL` constraints.
+3. **Permanent Guards & Tests**:
+   - **`tests/unit/test_templates_compile.py`**: Added permanent template compile smoke test `test_all_templates_compile()` to verify every `.html` template under `app/templates/` compiles cleanly without Jinja syntax errors.
+   - **`tests/integration/test_event_detail_renders.py`**: Added regression test verifying `GET /technician/events/{id}` returns HTTP 200 across `PLANNED`, `IN_PROGRESS`, `DONE`, and `MISSED` event statuses for assigned technicians and admins, and enforces HTTP 403 for unassigned roles.

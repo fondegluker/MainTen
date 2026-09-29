@@ -274,3 +274,10 @@ The repository integrates shell scripts for deployment and local testing:
   - In Jinja2 templates: Every `{% for %}` and `{% if %}` block must be strictly balanced and tested.
   - Template compile smoke test: Added `tests/unit/test_templates_compile.py` to recursively compile all HTML templates under `app/templates` on every test run.
   - In Python routes: Extract role/status strings via `val.value.lower() if hasattr(val, "value") else str(val).lower()`.
+
+## Jinja template rules (permanent)
+
+- `hasattr` is NOT available in Jinja. Use `{% if obj.attr is defined %}` or direct attribute access for values that are always present.
+- `list.append()` inside `{% set _ = ... %}` does NOT mutate the list in Jinja. Use `selectattr` / `rejectattr` filters or a single `{% for %}` loop with `{% if %}` branches.
+- Embedding values into inline JavaScript MUST use the `|tojson` filter. Never use `\'` or manual quote escaping inside a Jinja template.
+- `tests/unit/test_templates_compile.py` runs on every CI push and fails on any syntax error in any template.
